@@ -32,7 +32,7 @@
     <usedDebug>true</usedDebug>
     	<debugprobe>swd</debugprobe>
     <optimization></optimization>
-    <icfloc>1</icfloc>
+    <icfloc>0</icfloc>
     <Adefines>
         <define></define>
     </Adefines>   
@@ -199,6 +199,10 @@
                                 </file>
 
                                 <file>
+                                 <name>Src/dma.c</name>
+                                </file>
+
+                                <file>
                                  <name>Src/freertos.c</name>
                                 </file>
 
@@ -239,18 +243,9 @@
                <group>
         <name>Src</name>
                     <group>
-                    <name>adc.c</name>
+                    <name>dma.c</name>
                                     <file>
-                                            <name>Src/adc.c</name>
-                                    </file>
-                    </group>
-        </group>
-               <group>
-        <name>Src</name>
-                    <group>
-                    <name>main.c</name>
-                                    <file>
-                                            <name>Src/main.c</name>
+                                            <name>Src/dma.c</name>
                                     </file>
                     </group>
         </group>
@@ -275,15 +270,6 @@
                <group>
         <name>Src</name>
                     <group>
-                    <name>i2c.c</name>
-                                    <file>
-                                            <name>Src/i2c.c</name>
-                                    </file>
-                    </group>
-        </group>
-               <group>
-        <name>Src</name>
-                    <group>
                     <name>stm32f3xx_hal_msp.c</name>
                                     <file>
                                             <name>Src/stm32f3xx_hal_msp.c</name>
@@ -296,15 +282,6 @@
                     <name>opamp.c</name>
                                     <file>
                                             <name>Src/opamp.c</name>
-                                    </file>
-                    </group>
-        </group>
-               <group>
-        <name>Src</name>
-                    <group>
-                    <name>stm32f3xx_it.c</name>
-                                    <file>
-                                            <name>Src/stm32f3xx_it.c</name>
                                     </file>
                     </group>
         </group>
@@ -341,6 +318,42 @@
                     <name>gpio.c</name>
                                     <file>
                                             <name>Src/gpio.c</name>
+                                    </file>
+                    </group>
+        </group>
+               <group>
+        <name>Src</name>
+                    <group>
+                    <name>adc.c</name>
+                                    <file>
+                                            <name>Src/adc.c</name>
+                                    </file>
+                    </group>
+        </group>
+               <group>
+        <name>Src</name>
+                    <group>
+                    <name>main.c</name>
+                                    <file>
+                                            <name>Src/main.c</name>
+                                    </file>
+                    </group>
+        </group>
+               <group>
+        <name>Src</name>
+                    <group>
+                    <name>i2c.c</name>
+                                    <file>
+                                            <name>Src/i2c.c</name>
+                                    </file>
+                    </group>
+        </group>
+               <group>
+        <name>Src</name>
+                    <group>
+                    <name>stm32f3xx_it.c</name>
+                                    <file>
+                                            <name>Src/stm32f3xx_it.c</name>
                                     </file>
                     </group>
         </group>
