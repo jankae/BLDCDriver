@@ -30,27 +30,12 @@ OPT = -Og
 #######################################
 # source path
 SOURCES_DIR =  \
-Application \
-Drivers/CMSIS \
-Application/User/Src/main.c \
-Application/User \
-Middlewares \
-Middlewares/FreeRTOS \
-Application/User/Src/opamp.c \
-Application/User/Src/stm32f3xx_it.c \
-Application/User/Src/gpio.c \
-Application/User/Src/i2c.c \
-Application/User/Src/stm32f3xx_hal_timebase_TIM.c \
-Application/User/Src \
-Application/MAKEFILE \
-Application/User/Src/spi.c \
-Application/User/Src/freertos.c \
-Drivers/STM32F3xx_HAL_Driver \
-Application/User/Src/tim.c \
-Drivers \
-Application/User/Src/adc.c \
-Application/User/Src/usart.c \
-Application/User/Src/stm32f3xx_hal_msp.c
+Src \
+Middlewares/Third_Party/FreeRTOS/Source \
+Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS \
+Middlewares/Third_Party/FreeRTOS/Source/portable/MemMang \
+Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F \
+Drivers/STM32F3xx_HAL_Driver/Src \
 
 # firmware library path
 PERIFLIB_PATH = 
@@ -62,63 +47,7 @@ BUILD_DIR = build
 # source
 ######################################
 # C sources
-C_SOURCES =  \
-Drivers/STM32F3xx_HAL_Driver/Src/stm32f3xx_hal_flash_ex.c \
-Middlewares/Third_Party/FreeRTOS/Source/portable/MemMang/heap_4.c \
-Drivers/STM32F3xx_HAL_Driver/Src/stm32f3xx_hal_rcc.c \
-Drivers/STM32F3xx_HAL_Driver/Src/stm32f3xx_hal_pwr.c \
-Drivers/STM32F3xx_HAL_Driver/Src/stm32f3xx_hal_tim.c \
-Src/stm32f3xx_it.c \
-Drivers/STM32F3xx_HAL_Driver/Src/stm32f3xx_hal_tim_ex.c \
-Middlewares/Third_Party/FreeRTOS/Source/tasks.c \
-Src/freertos.c \
-Middlewares/Third_Party/FreeRTOS/Source/queue.c \
-Middlewares/Third_Party/FreeRTOS/Source/event_groups.c \
-Src/usart.c \
-Src/main.c \
-Src/stm32f3xx_hal_msp.c \
-Drivers/STM32F3xx_HAL_Driver/Src/stm32f3xx_hal_opamp_ex.c \
-Drivers/STM32F3xx_HAL_Driver/Src/stm32f3xx_hal_cortex.c \
-Src/freertos.c \
-Src/gpio.c \
-Drivers/STM32F3xx_HAL_Driver/Src/stm32f3xx_hal_uart.c \
-Middlewares/Third_Party/FreeRTOS/Source/croutine.c \
-Drivers/STM32F3xx_HAL_Driver/Src/stm32f3xx_hal_adc.c \
-Src/spi.c \
-Drivers/STM32F3xx_HAL_Driver/Src/stm32f3xx_hal_rcc_ex.c \
-Src/main.c \
-Src/opamp.c \
-Drivers/STM32F3xx_HAL_Driver/Src/stm32f3xx_hal_pwr_ex.c \
-Src/adc.c \
-Src/adc.c \
-Drivers/STM32F3xx_HAL_Driver/Src/stm32f3xx_hal_flash.c \
-Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS/cmsis_os.c \
-Drivers/STM32F3xx_HAL_Driver/Src/stm32f3xx_hal_opamp.c \
-Drivers/STM32F3xx_HAL_Driver/Src/stm32f3xx_hal.c \
-Src/opamp.c \
-Drivers/STM32F3xx_HAL_Driver/Src/stm32f3xx_hal_i2c_ex.c \
-Drivers/STM32F3xx_HAL_Driver/Src/stm32f3xx_hal_gpio.c \
-Src/stm32f3xx_it.c \
-Drivers/STM32F3xx_HAL_Driver/Src/stm32f3xx_hal_dma.c \
-Src/stm32f3xx_hal_msp.c \
-Src/tim.c \
-Src/gpio.c \
-Src/tim.c \
-Src/spi.c \
-Src/stm32f3xx_hal_timebase_TIM.c \
-Drivers/STM32F3xx_HAL_Driver/Src/stm32f3xx_hal_adc_ex.c \
-Middlewares/Third_Party/FreeRTOS/Source/timers.c \
-Middlewares/Third_Party/FreeRTOS/Source/list.c \
-Src/system_stm32f3xx.c \
-Src/usart.c \
-Src/i2c.c \
-Drivers/STM32F3xx_HAL_Driver/Src/stm32f3xx_hal_spi.c \
-Src/i2c.c \
-Drivers/STM32F3xx_HAL_Driver/Src/stm32f3xx_hal_uart_ex.c \
-Src/stm32f3xx_hal_timebase_TIM.c \
-Drivers/STM32F3xx_HAL_Driver/Src/stm32f3xx_hal_spi_ex.c \
-Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F/port.c \
-Drivers/STM32F3xx_HAL_Driver/Src/stm32f3xx_hal_i2c.c  
+C_SOURCES := $(foreach sdir,$(SOURCES_DIR),$(wildcard $(sdir)/*.c))
 
 # ASM sources
 ASM_SOURCES =  \
@@ -134,7 +63,7 @@ PERIFLIB_SOURCES =
 #######################################
 # binaries
 #######################################
-BINPATH = 
+BINPATH = /usr/bin
 PREFIX = arm-none-eabi-
 CC = $(BINPATH)/$(PREFIX)gcc
 AS = $(BINPATH)/$(PREFIX)gcc -x assembler-with-cpp
