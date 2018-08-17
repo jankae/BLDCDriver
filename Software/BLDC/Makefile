@@ -121,7 +121,7 @@ C_INCLUDES =  \
 ASFLAGS = $(MCU) $(AS_DEFS) $(AS_INCLUDES) $(OPT) -Wall -fdata-sections -ffunction-sections
 
 CFLAGS = $(MCU) $(C_DEFS) $(C_INCLUDES) $(OPT) -Wall -fdata-sections -ffunction-sections
-CXXFLAGS = $(MCU) $(C_DEFS) $(C_INCLUDES) $(OPT) -std=c++11 -Wall -Wextra -Wno-implicit-fallthrough -fno-exceptions -fno-rtti -fdata-sections -ffunction-sections -fpermissive
+CXXFLAGS = $(MCU) $(C_DEFS) $(C_INCLUDES) $(OPT) -std=c++14 -Wall -Wextra -Wno-implicit-fallthrough -fno-exceptions -fno-rtti -fdata-sections -ffunction-sections -fpermissive
 
 ifeq ($(DEBUG), 1)
 CFLAGS += -g -gdwarf-2
