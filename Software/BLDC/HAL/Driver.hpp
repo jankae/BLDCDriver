@@ -5,6 +5,8 @@
 namespace Core {
 namespace BLDC {
 class Driver : public HAL {
+	Driver();
+
 	void SetPWM(uint16_t promille) override;
 
 	void InitiateStart() override;

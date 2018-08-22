@@ -28,8 +28,8 @@ void Core::BLDC::Detector::Init(Callback cb) {
 	callback = cb;
 }
 
-void Core::BLDC::Detector::Enable(uint8_t phase) {
-	sensingPhase = phase;
+void Core::BLDC::Detector::Enable(Phase phase) {
+	sensingPhase = (uint8_t) phase;
 	sensingActive = true;
 	SkipNextInspectionWindow = true;
 }
