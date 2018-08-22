@@ -11,7 +11,7 @@ extern TIM_HandleTypeDef htim1;
 
 static uint16_t pwmVal;
 
-void Core::BLDC::LowLevel::SetPWM(uint16_t pwm) {
+void HAL::BLDC::LowLevel::SetPWM(uint16_t pwm) {
 	// directly modify PWM registers without HAL overhead
 	pwmVal = pwm;
 	TIM1->CCR1 = pwm;
@@ -103,7 +103,7 @@ void Core::BLDC::LowLevel::SetPWM(uint16_t pwm) {
 //    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 //}
 
-void Core::BLDC::LowLevel::SetPhase(Phase p, State s) {
+void HAL::BLDC::LowLevel::SetPhase(Phase p, State s) {
 	TIM_OC_InitTypeDef sConfigOC;
 	GPIO_InitTypeDef GPIO_InitStruct;
 

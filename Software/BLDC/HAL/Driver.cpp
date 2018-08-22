@@ -4,7 +4,7 @@
 #include "Detector.hpp"
 #include "Timer.hpp"
 
-using namespace Core::BLDC;
+using namespace HAL::BLDC;
 
 static Driver::IncCallback IncCB;
 static void* IncPtr;
@@ -96,7 +96,7 @@ static void CrossingCallback(uint32_t usSinceLast, uint32_t timeSinceCrossing) {
 	});
 }
 
-Core::BLDC::Driver::Driver() {
+HAL::BLDC::Driver::Driver() {
 	LowLevel::SetPWM(0);
 	LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Idle);
 	LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::Idle);
@@ -110,22 +110,22 @@ Core::BLDC::Driver::Driver() {
 	state = State::Stopped;
 }
 
-void Core::BLDC::Driver::SetPWM(uint16_t promille) {
+void HAL::BLDC::Driver::SetPWM(uint16_t promille) {
 	LowLevel::SetPWM(
 			LowLevel::MaxPWM / 2
 					+ (uint32_t) LowLevel::MaxPWM / 2 * promille / 1000);
 }
 
-void Core::BLDC::Driver::InitiateStart() {
+void HAL::BLDC::Driver::InitiateStart() {
 	state = State::Starting;
 	StartStep = 0;
 	NextStartStep();
 }
 
-void Core::BLDC::Driver::RegisterIncCallback(IncCallback c, void* ptr) {
+void HAL::BLDC::Driver::RegisterIncCallback(IncCallback c, void* ptr) {
 	IncCB = c;
 	IncPtr = ptr;
 }
 
-void Core::BLDC::Driver::RegisterADCCallback(ADCCallback c, void* ptr) {
+void HAL::BLDC::Driver::RegisterADCCallback(ADCCallback c, void* ptr) {
 }

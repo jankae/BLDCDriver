@@ -2,7 +2,7 @@
 
 #include <cstdint>
 
-namespace Core {
+namespace HAL {
 namespace BLDC {
 namespace Timer {
 

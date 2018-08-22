@@ -2,7 +2,7 @@
 
 #include "BLDCHAL.hpp"
 
-namespace Core {
+namespace HAL {
 namespace BLDC {
 class Driver : public HAL {
 	Driver();

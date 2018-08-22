@@ -18,9 +18,9 @@ static uint32_t timeUS;
 static uint32_t lastCrossing;
 static bool sensingActive;
 static bool SkipNextInspectionWindow;
-static Core::BLDC::Detector::Callback callback;
+static HAL::BLDC::Detector::Callback callback;
 
-void Core::BLDC::Detector::Init(Callback cb) {
+void HAL::BLDC::Detector::Init(Callback cb) {
 	HAL_ADC_Start_DMA(&hadc1, (uint32_t*) ADCBuf, ADCBufferLength);
 	lastCrossing = 0;
 	timeUS = 0;
@@ -28,13 +28,13 @@ void Core::BLDC::Detector::Init(Callback cb) {
 	callback = cb;
 }
 
-void Core::BLDC::Detector::Enable(Phase phase) {
+void HAL::BLDC::Detector::Enable(Phase phase) {
 	sensingPhase = (uint8_t) phase;
 	sensingActive = true;
 	SkipNextInspectionWindow = true;
 }
 
-void Core::BLDC::Detector::Disable() {
+void HAL::BLDC::Detector::Disable() {
 	sensingActive = false;
 }
 
@@ -84,7 +84,7 @@ static void Analyze(uint16_t *data) {
 		num += (i - x_avg) * (y - y_avg);
 	}
 
-	float m = num / denom;
+	float m = (float) num / denom;
 
 	uint16_t b = y_avg - m * x_avg;
 
@@ -102,13 +102,13 @@ static void Analyze(uint16_t *data) {
 	}
 }
 
-void Core::BLDC::Detector::DMAComplete() {
+void HAL::BLDC::Detector::DMAComplete() {
 	Analyze(&ADCBuf[ADCBufferLength / 2]);
 	timeUS += ADCInspectionTimeus;
 }
 
 
-void Core::BLDC::Detector::DMAHalfComplete() {
+void HAL::BLDC::Detector::DMAHalfComplete() {
 	Analyze(&ADCBuf[0]);
 	timeUS += ADCInspectionTimeus;
 }
