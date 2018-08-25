@@ -4,8 +4,8 @@
 
 **  File        : LinkerScript.ld
 **
-**  Abstract    : Linker script for STM32F303C6Tx Device with
-**                32KByte FLASH, 12KByte RAM
+**  Abstract    : Linker script for STM32F303C8Tx Device with
+**                64KByte FLASH, 12KByte RAM
 **
 **                Set heap size, stack size and stack location according
 **                to application requirements.
@@ -43,7 +43,7 @@ MEMORY
 {
 RAM (xrw)      : ORIGIN = 0x20000000, LENGTH = 12K
 CCMRAM (rw)      : ORIGIN = 0x10000000, LENGTH = 4K
-FLASH (rx)      : ORIGIN = 0x8000000, LENGTH = 32K
+FLASH (rx)      : ORIGIN = 0x8000000, LENGTH = 64K
 }
 
 /* Define output sections */

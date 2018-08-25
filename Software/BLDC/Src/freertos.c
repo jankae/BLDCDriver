@@ -111,6 +111,8 @@ void StartDefaultTask(void const * argument)
 {
 
   /* USER CODE BEGIN StartDefaultTask */
+#include "Startup.hpp"
+	Start();
   /* Infinite loop */
   for(;;)
   {

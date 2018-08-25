@@ -23,7 +23,7 @@
 <configs>
   <config>
     <name>BLDC</name>				
-    <device>STM32F303C6Tx</device>		 
+    <device>STM32F303C8Tx</device>		 
     <heapSize>0x200</heapSize>
     <stackSize>0x400</stackSize>
     
@@ -32,7 +32,7 @@
     <usedDebug>true</usedDebug>
     	<debugprobe>swd</debugprobe>
     <optimization></optimization>
-    <icfloc>0</icfloc>
+    <icfloc>1</icfloc>
     <Adefines>
         <define></define>
     </Adefines>   
