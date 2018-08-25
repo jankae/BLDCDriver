@@ -22,6 +22,7 @@ enum class State : uint8_t {
 	Idle,
 };
 
+void Init();
 void SetPWM(uint16_t pwm);
 void SetPhase(Phase p, State s);
 

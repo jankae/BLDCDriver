@@ -4,7 +4,7 @@
 
 namespace HAL {
 namespace BLDC {
-class Driver : public HAL {
+class Driver : public HALDriver {
 	Driver();
 
 	void SetPWM(uint16_t promille) override;

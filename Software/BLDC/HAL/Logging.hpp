@@ -23,6 +23,6 @@ void SetLevel(enum Class cls, enum Lvl lvl);
 
 void Out(enum Class cls, enum Lvl lvl, const char *fmt, ...);
 
-void Uart(enum Class cls, enum Lvl lvl, const char *fmt, ...);
+void Uart(enum Lvl lvl, const char *fmt, ...);
 
 }

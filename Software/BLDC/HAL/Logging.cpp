@@ -5,7 +5,6 @@
 
 std::array<enum Log::Lvl, (int) Log::Class::MAX> levels;
 
-#include <stdarg.h>
 #include <string.h>
 #include "fifo.hpp"
 #include "usart.h"
@@ -88,8 +87,8 @@ void Log::Out(enum Class cls, enum Lvl lvl, const char* fmt, ...) {
 	UNUSED(fmt);
 }
 
-void Log::Uart(enum Class cls, enum Lvl lvl, const char* fmt, ...) {
-	if((int) levels[(int) cls] <= (int) lvl) {
+void Log::Uart(enum Lvl lvl, const char* fmt, ...) {
+	if((int) levels[(int) Class::BLDC] <= (int) lvl) {
 		if(!initialized) {
 			init();
 		}

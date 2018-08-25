@@ -3,8 +3,8 @@
 #include "stm32f3xx_hal.h"
 
 static constexpr int ADCSampleRate = 500000;
-static constexpr int ADCInspectionTimeus = 504;
-static constexpr int ADCBufferLength = ADCSampleRate * 2 * ADCInspectionTimeus / 1000000UL;
+static constexpr int ADCInspectionTimeus = 200;
+static constexpr int ADCBufferLength = 3 * ADCSampleRate * 2 * ADCInspectionTimeus / 1000000UL;
 static constexpr int PhaseSamplesPerInspection = ADCBufferLength / 6;
 
 static_assert(ADCBufferLength % 6 == 0, "ADC Buffer length must be a multiple of 6");
@@ -12,6 +12,7 @@ static_assert(ADCBufferLength % 6 == 0, "ADC Buffer length must be a multiple of
 static uint16_t ADCBuf[ADCBufferLength];
 
 extern ADC_HandleTypeDef hadc1;
+extern TIM_HandleTypeDef htim3;
 
 static uint8_t sensingPhase;
 static uint32_t timeUS;
@@ -20,8 +21,11 @@ static bool sensingActive;
 static bool SkipNextInspectionWindow;
 static HAL::BLDC::Detector::Callback callback;
 
+uint32_t DMAcnt = 0;
+
 void HAL::BLDC::Detector::Init(Callback cb) {
 	HAL_ADC_Start_DMA(&hadc1, (uint32_t*) ADCBuf, ADCBufferLength);
+	HAL_TIM_Base_Start(&htim3);
 	lastCrossing = 0;
 	timeUS = 0;
 	sensingActive = false;
@@ -47,6 +51,7 @@ static constexpr uint64_t LinRegDenomConstSampling(uint16_t nvalues) {
 }
 
 static void Analyze(uint16_t *data) {
+	DMAcnt++;
 	if (!sensingActive) {
 		return;
 	}
