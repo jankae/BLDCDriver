@@ -9,25 +9,22 @@
 
 #include "Tests.hpp"
 
-void dummy(uint32_t usSinceLast, uint32_t timeSinceCrossing) {
-
-}
-
-extern uint32_t DMAcnt;
+extern uint32_t timeUS;
 
 void Start() {
-	HAL::BLDC::Detector::Init(dummy);
+	Log::Init(Log::Lvl::Inf);
+
+	HAL::BLDC::Detector::Init();
 	HAL::BLDC::LowLevel::Init();
 
-	uint32_t start = DMAcnt;
 	vTaskDelay(100);
-	uint32_t stop = DMAcnt;
-	uint32_t diff = stop - start;
-	uint32_t sampleRate = diff * 252 / 10;
-//	Log::Uart(Log::Lvl::Inf, "DMA Samples: %d", diff);
-
-	Log::Uart(Log::Lvl::Inf, "Start: %d", stop);
+	Log::Uart(Log::Lvl::Inf, "Start");
 
 	vTaskDelay(2000);
-	Test::SetMidPWM();
+	Test::MotorStart();
+//	Test::TimerTest();
+//	Test::SetMidPWM();
+//	Test::DifferentPWMs();
+//	HAL::BLDC::Detector::Enable(HAL::BLDC::Detector::Phase::C, nullptr);
+	while(1);
 }

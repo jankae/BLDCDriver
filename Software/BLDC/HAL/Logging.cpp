@@ -10,7 +10,7 @@ std::array<enum Log::Lvl, (int) Log::Class::MAX> levels;
 #include "usart.h"
 
 static bool initialized = false;
-static Fifo<uint8_t, 1024> fifo __attribute__ ((section (".ccmram")));
+static Fifo<uint8_t, 1024> fifo;// __attribute__ ((section (".ccmram")));
 
 #define USART 				3
 
@@ -44,7 +44,7 @@ __weak void LogRedirect(const char *data, uint16_t length){
 	UNUSED(length);
 }
 
-static void write(const char *start, const char *end) {
+void write(const char *start, const char *end) {
 	LogRedirect(start, end - start);
 	while(start != end) {
 		fifo.enqueue(*start);

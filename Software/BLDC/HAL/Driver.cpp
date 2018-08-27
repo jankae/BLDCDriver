@@ -3,6 +3,10 @@
 #include "lowlevel.hpp"
 #include "Detector.hpp"
 #include "Timer.hpp"
+#include "Logging.hpp"
+
+#include "stm32f3xx_hal.h"
+#include "stm32f303x8.h"
 
 using namespace HAL::BLDC;
 
@@ -18,69 +22,148 @@ enum class State : uint8_t {
 };
 
 static State state;
-static uint8_t StartStep;
-static constexpr uint32_t StartSequence[] = {150000, 100000, 50000, 20000};
-static constexpr uint8_t StartSequenceLength = sizeof(StartSequence)/sizeof(StartSequence[0]);
+static uint32_t StartTime;
+static uint16_t StartSteps;
 
+//static constexpr uint32_t StartSequence[] = { 20000, 19000, 18000, 17000, 16000,
+//		15000, 14000, 13000, 12000, 11000, 10000, 9000, 8000, 7000, 6000, 5000,
+//		4000, 3000, 2000, 1800, 1700, 1600, 1600, 1600, 1600, 1600, 1600, 1600,
+//		1600, 1600, 1600, 1600, 1600, 1600, 1600, 1600, 1600, 1600, 1600, 1600,
+//		1600, 1600, 1600, 1600, 1600, 1600, 1600, 1600, 1600, 1600, 1600, 1600,
+//		1600, 1600, 1600, 1600, 1600, 1600, 1600, 1600, 1600, 1600, 1600, 1600,
+//		1600, 1600, 1600, 1600, 1600, 1600, 1600, 1600, 1600 };
+//static constexpr uint16_t StartPWM[]
+static constexpr uint32_t StartSequenceLength = 800000; //sizeof(StartSequence)/sizeof(StartSequence[0]);
+static constexpr uint32_t StartFinalRPM = 800;
+static constexpr uint8_t MotorPoles = 14;
+static constexpr uint32_t StartMaxPeriod = 20000;
+static constexpr uint16_t StartFinalPWM = 101;
+static constexpr uint16_t StartMinPWM = 100;
+
+static uint32_t StartSequence(uint32_t time) {
+	constexpr uint32_t FinalPeriod = 1000000UL
+			/ (StartFinalRPM * 6 * MotorPoles / 2 / 60);
+	constexpr uint64_t dividend = FinalPeriod * StartSequenceLength;
+	uint64_t period = dividend / time;
+	if (time == 0 || period > StartMaxPeriod)
+		return StartMaxPeriod;
+	else
+		return period;
+}
+
+static uint16_t StartPWM(uint32_t time) {
+	constexpr uint16_t divisor = StartSequenceLength / (StartFinalPWM - StartMinPWM);
+	return StartMinPWM + time / divisor;
+}
+
+static uint32_t timeBetweenCommutations;
+
+static void CrossingCallback(uint32_t usSinceLast, uint32_t timeSinceCrossing);
 static void SetStep(uint8_t step) {
+//	HAL_GPIO_WritePin(TRIGGER_GPIO_Port, TRIGGER_Pin, GPIO_PIN_SET);
+	HAL_GPIO_TogglePin(TRIGGER_GPIO_Port, TRIGGER_Pin);
 	switch (step) {
 	case 0:
 		LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::High);
 		LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::Idle);
 		LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Low);
-		Detector::Enable(Detector::Phase::B);
+		Detector::SetPhase(Detector::Phase::B, false);
 		break;
 	case 1:
 		LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Idle);
 		LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::High);
 		LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Low);
-		Detector::Enable(Detector::Phase::A);
+		Detector::SetPhase(Detector::Phase::A, true);
 		break;
 	case 2:
 		LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Low);
 		LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::High);
 		LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Idle);
-		Detector::Enable(Detector::Phase::C);
+		Detector::SetPhase(Detector::Phase::C, false);
 		break;
 	case 3:
 		LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Low);
 		LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::Idle);
 		LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::High);
-		Detector::Enable(Detector::Phase::B);
+		Detector::SetPhase(Detector::Phase::B, true);
 		break;
 	case 4:
 		LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Idle);
 		LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::Low);
 		LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::High);
-		Detector::Enable(Detector::Phase::A);
+		Detector::SetPhase(Detector::Phase::A, false);
 		break;
 	case 5:
 		LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::High);
 		LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::Low);
 		LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Idle);
-		Detector::Enable(Detector::Phase::C);
+		Detector::SetPhase(Detector::Phase::C, true);
 		break;
+	}
+
+	if (state == State::Running) {
+		Timer::Schedule(timeBetweenCommutations * 5,
+				[]() {
+					Detector::Disable();
+					LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Idle);
+					LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::Idle);
+					LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Idle);
+
+					state = State::Stopped;
+					Log::Uart(Log::Lvl::Err, "Timed out while waiting for commutation, motor stopped");
+				});
 	}
 }
 
 static void NextStartStep() {
+//	Log::Uart(Log::Lvl::Dbg, "Start step %d", StartStep);
 	CommutationStep = (CommutationStep + 1) % 6;
+	Detector::Disable();
 	SetStep(CommutationStep);
+	if(state == State::Running) {
+		// Successfully started, enter normal operation mode
+		Detector::Enable(CrossingCallback);
+		return;
+	}
 	// Schedule next start step
-	StartStep++;
-	if (StartStep >= StartSequenceLength) {
+	auto length = StartSequence(StartTime);
+	LowLevel::SetPWM(StartPWM(StartTime));
+	StartTime += length;
+
+	if(StartSteps >= 30) {
+		Detector::Enable(CrossingCallback, 300);
+	}
+	StartSteps++;
+
+	if (StartTime >= StartSequenceLength) {
 		// TODO Start attempt failed
+		Detector::Disable();
+		Log::Uart(Log::Lvl::Err, "Failed to start motor");
+		LowLevel::SetPWM(0);
+		LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Idle);
+		LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::Idle);
+		LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Idle);
+		state = State::Stopped;
 		return;
 	}
 
-	Timer::Schedule(StartSequence[StartStep - 1], NextStartStep);
+	Timer::Schedule(length, NextStartStep);
 }
 
 static void CrossingCallback(uint32_t usSinceLast, uint32_t timeSinceCrossing) {
+//	HAL_GPIO_WritePin(TRIGGER_GPIO_Port, TRIGGER_Pin, GPIO_PIN_RESET);
 	if (state == State::Starting) {
 		state = State::Running;
+		Log::Uart(Log::Lvl::Inf, "Motor started after %luus", StartTime);
+//		Detector::Disable();
+//		timeBetweenCommutations = StartSequence(StartTime);
+//		return;
 		// abort next scheduled start step
 		Timer::Abort();
+		LowLevel::SetPWM(100);
+		// no previous commutation known, take a guess from the start sequence
+		usSinceLast = StartSequence(StartTime);
+//		timeSinceCrossing = StartSequence(StartTime) / 2;
 	} else if (IncCB) {
 		// motor is already running, report back crossing intervals to controller
 		IncCB(IncPtr, usSinceLast);
@@ -90,10 +173,14 @@ static void CrossingCallback(uint32_t usSinceLast, uint32_t timeSinceCrossing) {
 	Detector::Disable();
 	CommutationStep = (CommutationStep + 1) % 6;
 	// Calculate time until next 30° rotation
-	uint32_t TimeToNextCommutation = usSinceLast / 2 - timeSinceCrossing;
+	uint32_t TimeToNextCommutation = usSinceLast / 2;// - timeSinceCrossing;
 	Timer::Schedule(TimeToNextCommutation, []() {
 		SetStep(CommutationStep);
+		Detector::Enable(CrossingCallback);
 	});
+//	Log::Uart(Log::Lvl::Inf, "next comm in %luus", TimeToNextCommutation);
+
+	timeBetweenCommutations = usSinceLast;
 }
 
 HAL::BLDC::Driver::Driver() {
@@ -102,7 +189,6 @@ HAL::BLDC::Driver::Driver() {
 	LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::Idle);
 	LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Idle);
 
-	Detector::Init(CrossingCallback);
 	Detector::Disable();
 
 	CommutationStep = 0;
@@ -110,16 +196,20 @@ HAL::BLDC::Driver::Driver() {
 	state = State::Stopped;
 }
 
-void HAL::BLDC::Driver::SetPWM(uint16_t promille) {
-	LowLevel::SetPWM(
-			LowLevel::MaxPWM / 2
-					+ (uint32_t) LowLevel::MaxPWM / 2 * promille / 1000);
+void HAL::BLDC::Driver::SetPWM(int16_t promille) {
+	LowLevel::SetPWM(promille);
 }
 
 void HAL::BLDC::Driver::InitiateStart() {
+	Log::Uart(Log::Lvl::Dbg, "Initiating start sequence");
 	state = State::Starting;
-	StartStep = 0;
-	NextStartStep();
+	LowLevel::SetPWM(30);
+	Detector::Disable();
+	SetStep(CommutationStep);
+	StartTime = 0;
+	StartSteps = 0;
+	Timer::Schedule(1000000, NextStartStep);
+//	NextStartStep();
 }
 
 void HAL::BLDC::Driver::RegisterIncCallback(IncCallback c, void* ptr) {
@@ -128,4 +218,24 @@ void HAL::BLDC::Driver::RegisterIncCallback(IncCallback c, void* ptr) {
 }
 
 void HAL::BLDC::Driver::RegisterADCCallback(ADCCallback c, void* ptr) {
+}
+
+static void Idle() {
+	LowLevel::SetPWM(0);
+	LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Idle);
+	LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::Idle);
+	LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Idle);
+}
+
+void HAL::BLDC::Driver::FreeRunning() {
+	Idle();
+	state = State::Stopped;
+}
+
+void HAL::BLDC::Driver::Stop() {
+	LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Low);
+	LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::Low);
+	LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Low);
+	state = State::Stopped;
+	Timer::Schedule(500000, Idle);
 }

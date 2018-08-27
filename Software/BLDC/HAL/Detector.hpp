@@ -16,12 +16,15 @@ enum class Phase : uint8_t {
 	C = 2,
 };
 
-void Init(Callback cb);
-void Enable(Phase phase);
+void Init();
+void SetPhase(Phase p, bool rising);
+void Enable(Callback cb, uint16_t hyst = 0);
 void Disable();
 
 void DMAComplete();
 void DMAHalfComplete();
+
+void PrintBuffer();
 
 }
 

@@ -5,9 +5,14 @@
 namespace HAL {
 namespace BLDC {
 class Driver : public HALDriver {
+public:
 	Driver();
 
-	void SetPWM(uint16_t promille) override;
+	void SetPWM(int16_t promille) override;
+
+	void FreeRunning();
+	void Stop();
+
 
 	void InitiateStart() override;
 
