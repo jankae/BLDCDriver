@@ -8,6 +8,7 @@
 #include "Timer.hpp"
 #include "Driver.hpp"
 #include "Detector.hpp"
+#include "InductanceSensing.hpp"
 
 using namespace HAL::BLDC;
 
@@ -30,51 +31,16 @@ void Test::DifferentPWMs(void) {
 void Test::MotorStart(void) {
 	Log::Uart(Log::Lvl::Inf, "Test, attempting to start motor");
 	Driver d;
-	d.InitiateStart();
-//	vTaskDelay(1000);
-//	for(uint16_t pwm = 200;pwm>0;pwm--) {
-//		d.SetPWM(pwm);
-//		Log::Uart(Log::Lvl::Inf, "PWM: %d", pwm);
-//		vTaskDelay(100);
-//	}
-//	while(1) {
-//	d.InitiateStart();
-//	vTaskDelay(2000);
-//	d.FreeRunning();
-//	vTaskDelay(3000);
-//	d.InitiateStart();
-//	vTaskDelay(2000);
-//	d.Stop();
-//	vTaskDelay(3000);
-//	}
-	vTaskDelay(2000);
-	d.SetPWM(600);
-	constexpr uint16_t maxRPM = 600;
-//	for(uint16_t pwm = 100;pwm<maxRPM;pwm++) {
-//		d.SetPWM(pwm);
-//		vTaskDelay(1);
-//	}
-	vTaskDelay(1000);
-	for(uint16_t pwm = maxRPM;pwm>100;pwm--) {
-		d.SetPWM(pwm);
-		vTaskDelay(1);
+	while (1) {
+		d.InitiateStart();
+		vTaskDelay(2000);
+		d.FreeRunning();
+		vTaskDelay(3000);
+		d.InitiateStart();
+		vTaskDelay(2000);
+		d.Stop();
+		vTaskDelay(3000);
 	}
-//	for (uint16_t pwm = 100; pwm < maxRPM; pwm++) {
-//		d.SetPWM(pwm);
-//		vTaskDelay(5);
-//	}
-	d.SetPWM(100);
-//	d.SetPWM(50);
-//	for(uint16_t pwm = 500;pwm>100;pwm--) {
-//		d.SetPWM(pwm);
-//		vTaskDelay(2);
-//	}
-//	d.SetPWM(500);
-//	vTaskDelay(2000);
-//	d.SetPWM(100);
-//	vTaskDelay(2000);
-//	d.SetPWM(0);
-//	Detector::PrintBuffer();
 }
 
 void Test::TimerTest(void) {
@@ -89,4 +55,68 @@ void Test::TimerTest(void) {
 //			Log::Uart(Log::Lvl::Inf, "Callback executed at %lu", HAL_GetTick());
 		});
 	});
+}
+
+void Test::InductanceSense() {
+	while (1) {
+		uint16_t pos = InductanceSensing::RotorPosition();
+//		Log::Uart(Log::Lvl::Inf, "Pos: %d", pos);
+		vTaskDelay(1000);
+	}
+}
+
+void Test::ManualCommutation() {
+	uint8_t step = 0;
+
+	for (uint8_t i = 0; i < 42; i++) {
+		step = (step + 1) % 6;
+
+		LowLevel::SetPWM(50);
+		switch (step) {
+		case 0:
+			LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::High);
+			LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::Idle);
+			LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Low);
+			Detector::SetPhase(Detector::Phase::B, false);
+			break;
+		case 1:
+			LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Idle);
+			LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::High);
+			LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Low);
+			Detector::SetPhase(Detector::Phase::A, true);
+			break;
+		case 2:
+			LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Low);
+			LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::High);
+			LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Idle);
+			Detector::SetPhase(Detector::Phase::C, false);
+			break;
+		case 3:
+			LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Low);
+			LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::Idle);
+			LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::High);
+			Detector::SetPhase(Detector::Phase::B, true);
+			break;
+		case 4:
+			LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Idle);
+			LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::Low);
+			LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::High);
+			Detector::SetPhase(Detector::Phase::A, false);
+			break;
+		case 5:
+			LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::High);
+			LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::Low);
+			LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Idle);
+			Detector::SetPhase(Detector::Phase::C, true);
+			break;
+		}
+		vTaskDelay(1000);
+		LowLevel::SetPWM(0);
+		LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Idle);
+		LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::Idle);
+		LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Idle);
+
+		uint8_t sector = InductanceSensing::RotorPosition();
+		Log::Uart(Log::Lvl::Inf, "Step: %d, Sector: %d", step, sector);
+	}
 }

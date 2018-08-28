@@ -7,6 +7,7 @@
 
 #include "stm32f3xx_hal.h"
 #include "stm32f303x8.h"
+#include "InductanceSensing.hpp"
 
 using namespace HAL::BLDC;
 
@@ -25,18 +26,10 @@ static State state;
 static uint32_t StartTime;
 static uint16_t StartSteps;
 
-//static constexpr uint32_t StartSequence[] = { 20000, 19000, 18000, 17000, 16000,
-//		15000, 14000, 13000, 12000, 11000, 10000, 9000, 8000, 7000, 6000, 5000,
-//		4000, 3000, 2000, 1800, 1700, 1600, 1600, 1600, 1600, 1600, 1600, 1600,
-//		1600, 1600, 1600, 1600, 1600, 1600, 1600, 1600, 1600, 1600, 1600, 1600,
-//		1600, 1600, 1600, 1600, 1600, 1600, 1600, 1600, 1600, 1600, 1600, 1600,
-//		1600, 1600, 1600, 1600, 1600, 1600, 1600, 1600, 1600, 1600, 1600, 1600,
-//		1600, 1600, 1600, 1600, 1600, 1600, 1600, 1600, 1600 };
-//static constexpr uint16_t StartPWM[]
-static constexpr uint32_t StartSequenceLength = 800000; //sizeof(StartSequence)/sizeof(StartSequence[0]);
+static constexpr uint32_t StartSequenceLength = 140000; //sizeof(StartSequence)/sizeof(StartSequence[0]);
 static constexpr uint32_t StartFinalRPM = 800;
-static constexpr uint8_t MotorPoles = 14;
-static constexpr uint32_t StartMaxPeriod = 20000;
+static constexpr uint8_t MotorPoles = 12;
+static constexpr uint32_t StartMaxPeriod = 10000;
 static constexpr uint16_t StartFinalPWM = 101;
 static constexpr uint16_t StartMinPWM = 100;
 
@@ -61,7 +54,7 @@ static uint32_t timeBetweenCommutations;
 static void CrossingCallback(uint32_t usSinceLast, uint32_t timeSinceCrossing);
 static void SetStep(uint8_t step) {
 //	HAL_GPIO_WritePin(TRIGGER_GPIO_Port, TRIGGER_Pin, GPIO_PIN_SET);
-	HAL_GPIO_TogglePin(TRIGGER_GPIO_Port, TRIGGER_Pin);
+//	HAL_GPIO_TogglePin(TRIGGER_GPIO_Port, TRIGGER_Pin);
 	switch (step) {
 	case 0:
 		LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::High);
@@ -130,8 +123,8 @@ static void NextStartStep() {
 	LowLevel::SetPWM(StartPWM(StartTime));
 	StartTime += length;
 
-	if(StartSteps >= 30) {
-		Detector::Enable(CrossingCallback, 300);
+	if(StartSteps >= 10) {
+		Detector::Enable(CrossingCallback, 10);
 	}
 	StartSteps++;
 
@@ -203,13 +196,20 @@ void HAL::BLDC::Driver::SetPWM(int16_t promille) {
 void HAL::BLDC::Driver::InitiateStart() {
 	Log::Uart(Log::Lvl::Dbg, "Initiating start sequence");
 	state = State::Starting;
-	LowLevel::SetPWM(30);
-	Detector::Disable();
-	SetStep(CommutationStep);
+	uint8_t sector = InductanceSensing::RotorPosition();
 	StartTime = 0;
 	StartSteps = 0;
-	Timer::Schedule(1000000, NextStartStep);
-//	NextStartStep();
+	if (sector == 0) {
+		// unable to determine rotor position, use align and go
+		LowLevel::SetPWM(30);
+		Detector::Disable();
+		SetStep(CommutationStep);
+		Timer::Schedule(1000000, NextStartStep);
+	} else {
+		// rotor position determined, modify next commutation step accordingly
+		CommutationStep = (7 - sector) % 6;
+		NextStartStep();
+	}
 }
 
 void HAL::BLDC::Driver::RegisterIncCallback(IncCallback c, void* ptr) {
@@ -221,18 +221,20 @@ void HAL::BLDC::Driver::RegisterADCCallback(ADCCallback c, void* ptr) {
 }
 
 static void Idle() {
-	LowLevel::SetPWM(0);
 	LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Idle);
 	LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::Idle);
 	LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Idle);
+	LowLevel::SetPWM(0);
 }
 
 void HAL::BLDC::Driver::FreeRunning() {
+	Timer::Abort();
 	Idle();
 	state = State::Stopped;
 }
 
 void HAL::BLDC::Driver::Stop() {
+	Timer::Abort();
 	LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Low);
 	LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::Low);
 	LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Low);

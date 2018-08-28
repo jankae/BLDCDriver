@@ -18,6 +18,8 @@ enum class State : uint8_t {
 	High,
 	Low,
 	Idle,
+	ConstHigh,
+	ConstLow,
 };
 
 void Init();

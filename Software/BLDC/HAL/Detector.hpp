@@ -21,6 +21,8 @@ void SetPhase(Phase p, bool rising);
 void Enable(Callback cb, uint16_t hyst = 0);
 void Disable();
 
+uint16_t GetLastSample(Phase p);
+
 void DMAComplete();
 void DMAHalfComplete();
 

@@ -51,91 +51,54 @@ void HAL::BLDC::LowLevel::SetPhase(Phase p, State s) {
 
 	GPIO_TypeDef *gpio = Ports[(int) p];
 	uint16_t pin = Pins[(int) p];
-	TIM1->CCR1 = pwmVal;
-	TIM1->CCR2 = pwmVal;
-	TIM1->CCR3 = pwmVal;
 
-	switch(s) {
+	switch (s) {
 	case State::High:
 		// Enable alternate function (PWM generation)
-		gpio->MODER &= ~(0x01 << (pin*2));
-		gpio->MODER |= (0x02 << (pin*2));
-//		// Configure PWMs
-//		sConfigOC.OCMode = TIM_OCMODE_PWM1;
-//		sConfigOC.Pulse = pwmVal;
-//		sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
-//		sConfigOC.OCNPolarity = TIM_OCNPOLARITY_HIGH;
-//		sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
-//		sConfigOC.OCIdleState = TIM_OCIDLESTATE_RESET;
-//		sConfigOC.OCNIdleState = TIM_OCNIDLESTATE_RESET;
-//		if (HAL_TIM_PWM_ConfigChannel(&htim1, &sConfigOC, Channels[(int) p])
-//				!= HAL_OK) {
-//			_Error_Handler(__FILE__, __LINE__);
-//		}
-//		// enable PWM outputs
-//	    GPIO_InitStruct.Pin = Pins[(int) p];
-//	    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
-//	    GPIO_InitStruct.Pull = GPIO_NOPULL;
-//	    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
-//	    GPIO_InitStruct.Alternate = GPIO_AF6_TIM1;
-//	    HAL_GPIO_Init(Ports[(int) p], &GPIO_InitStruct);
-//		HAL_TIM_PWM_Start(&htim1, Channels[(int) p]);
+		TIM1->CCR1 = pwmVal;
+		TIM1->CCR2 = pwmVal;
+		TIM1->CCR3 = pwmVal;
+		gpio->MODER &= ~(0x01 << (pin * 2));
+		gpio->MODER |= (0x02 << (pin * 2));
 		break;
+	case State::ConstLow:
+		/* no break */
 	case State::Low:
 		// Set as low output
-		gpio->MODER &= ~(0x02 << (pin*2));
-		gpio->MODER |= (0x01 << (pin*2));
-		gpio->BRR = pin;
-//		GPIO_InitStruct.Pin = Pins[(int) p];
-//		GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-//		GPIO_InitStruct.Pull = GPIO_NOPULL;
-//		GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
-//		HAL_GPIO_Init(Ports[(int) p], &GPIO_InitStruct);
-//		HAL_GPIO_WritePin(Ports[(int) p], Pins[(int) p], GPIO_PIN_RESET);
-//		sConfigOC.OCMode = TIM_OCMODE_PWM1;
-//		sConfigOC.Pulse = pwmVal;
-//		sConfigOC.OCPolarity = TIM_OCPOLARITY_LOW;
-//		sConfigOC.OCNPolarity = TIM_OCNPOLARITY_HIGH;
-//		sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
-//		sConfigOC.OCIdleState = TIM_OCIDLESTATE_RESET;
-//		sConfigOC.OCNIdleState = TIM_OCNIDLESTATE_RESET;
-//		if (HAL_TIM_PWM_ConfigChannel(&htim1, &sConfigOC, Channels[(int) p])
-//				!= HAL_OK) {
-//			_Error_Handler(__FILE__, __LINE__);
-//		}
-//		// enable PWM outputs
-//	    GPIO_InitStruct.Pin = Pins[(int) p];
-//	    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
-//	    GPIO_InitStruct.Pull = GPIO_NOPULL;
-//	    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
-//	    GPIO_InitStruct.Alternate = GPIO_AF6_TIM1;
-//	    HAL_GPIO_Init(Ports[(int) p], &GPIO_InitStruct);
-//		HAL_TIM_PWM_Start(&htim1, Channels[(int) p]);
+		gpio->MODER &= ~(0x02 << (pin * 2));
+		gpio->MODER |= (0x01 << (pin * 2));
+		gpio->BRR = (0x01 << pin);
 		break;
 	case State::Idle:
 		// Set pin as input
-		gpio->MODER &= ~(0x03 << (pin*2));
-//		GPIO_InitStruct.Pin = Pins[(int) p];
-//		GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-//		GPIO_InitStruct.Pull = GPIO_NOPULL;
-//		GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
-//		HAL_GPIO_Init(Ports[(int) p], &GPIO_InitStruct);
+		gpio->MODER &= ~(0x03 << (pin * 2));
+		break;
+	case State::ConstHigh:
+		// Set as high output
+		gpio->MODER &= ~(0x02 << (pin * 2));
+		gpio->MODER |= (0x01 << (pin * 2));
+		gpio->BSRR = (0x01 << pin);
 		break;
 	}
 }
 
 #include "Detector.hpp"
+#include "PowerADC.hpp"
 
 extern "C" {
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc) {
 	if(hadc->Instance == ADC1) {
 		HAL::BLDC::Detector::DMAComplete();
+	} else if(hadc->Instance == ADC2) {
+		HAL::BLDC::PowerADC::DMAComplete();
 	}
 }
 
 void HAL_ADC_ConvHalfCpltCallback(ADC_HandleTypeDef* hadc) {
 	if(hadc->Instance == ADC1) {
 		HAL::BLDC::Detector::DMAHalfComplete();
+	} else if(hadc->Instance == ADC2) {
+		HAL::BLDC::PowerADC::DMAHalfComplete();
 	}
 }
 }
