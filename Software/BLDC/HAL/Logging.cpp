@@ -9,8 +9,7 @@ std::array<enum Log::Lvl, (int) Log::Class::MAX> levels;
 #include "fifo.hpp"
 #include "usart.h"
 
-static bool initialized = false;
-static Fifo<uint8_t, 1024> fifo;// __attribute__ ((section (".ccmram")));
+static Fifo<uint8_t, 1024> fifo __attribute__ ((section (".ccmram")));
 
 #define USART 				3
 
@@ -32,11 +31,10 @@ do { const char string[] = s; write(string, string + sizeof(string) - 1); } whil
 
 static void init() {
 	/* USART1 interrupt Init */
-	HAL_NVIC_SetPriority(NVIC_ISR, 8, 0);
+	HAL_NVIC_SetPriority(NVIC_ISR, 4, 0);
 	HAL_NVIC_EnableIRQ(NVIC_ISR);
 
 	fifo.clear();
-	initialized = true;
 }
 
 __weak void LogRedirect(const char *data, uint16_t length){
@@ -59,8 +57,9 @@ void HANDLER(void)
 {
 	if (USART_BASE->ISR & USART_ISR_TXE) {
 		uint8_t data = 0;
-		fifo.dequeue(data);
-		USART_BASE->TDR = data;
+		if (fifo.dequeue(data)) {
+			USART_BASE->TDR = data;
+		}
 		if (fifo.getLevel() == 0) {
 			/* complete buffer sent, disable interrupt */
 			USART_BASE->CR1 &= ~USART_CR1_TXEIE;
@@ -74,6 +73,8 @@ void Log::Init(enum Lvl lvl) {
 	for (auto i = 0; i < (int) Log::Class::MAX; i++) {
 		levels[i] = lvl;
 	}
+	fifo.clear();
+	init();
 }
 
 void Log::SetLevel(enum Class cls, enum Lvl lvl) {
@@ -89,9 +90,6 @@ void Log::Out(enum Class cls, enum Lvl lvl, const char* fmt, ...) {
 
 void Log::Uart(enum Lvl lvl, const char* fmt, ...) {
 	if((int) levels[(int) Class::BLDC] <= (int) lvl) {
-		if(!initialized) {
-			init();
-		}
 		switch(lvl) {
 		case Lvl::Dbg:
 			writeString("[DBG]:");
@@ -118,4 +116,9 @@ void Log::Uart(enum Lvl lvl, const char* fmt, ...) {
 		write(buffer, buffer + len);
 		writeString("\n");
 	}
+}
+
+void Log::WriteChar(char c) {
+	fifo.enqueue(c);
+	USART_BASE->CR1 |= USART_CR1_TXEIE;
 }

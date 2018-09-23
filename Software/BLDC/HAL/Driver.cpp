@@ -16,13 +16,9 @@ static void* IncPtr;
 
 static uint8_t CommutationStep;
 
-enum class State : uint8_t {
-	Stopped,
-	Starting,
-	Running,
-};
 
-static State state;
+
+static Driver::State state;
 static uint32_t StartTime;
 static uint16_t StartSteps;
 
@@ -45,7 +41,7 @@ static uint32_t StartSequence(uint32_t time) {
 }
 
 static uint16_t StartPWM(uint32_t time) {
-	constexpr uint16_t divisor = StartSequenceLength / (StartFinalPWM - StartMinPWM);
+	constexpr uint32_t divisor = StartSequenceLength / (StartFinalPWM - StartMinPWM);
 	return StartMinPWM + time / divisor;
 }
 
@@ -60,60 +56,71 @@ static void SetStep(uint8_t step) {
 		LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::High);
 		LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::Idle);
 		LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Low);
-		Detector::SetPhase(Detector::Phase::B, false);
+		Detector::SetPhase(Detector::Phase::B, true);
 		break;
 	case 1:
 		LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Idle);
 		LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::High);
 		LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Low);
-		Detector::SetPhase(Detector::Phase::A, true);
+		Detector::SetPhase(Detector::Phase::A, false);
 		break;
 	case 2:
 		LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Low);
 		LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::High);
 		LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Idle);
-		Detector::SetPhase(Detector::Phase::C, false);
+		Detector::SetPhase(Detector::Phase::C, true);
 		break;
 	case 3:
 		LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Low);
 		LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::Idle);
 		LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::High);
-		Detector::SetPhase(Detector::Phase::B, true);
+		Detector::SetPhase(Detector::Phase::B, false);
 		break;
 	case 4:
 		LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Idle);
 		LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::Low);
 		LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::High);
-		Detector::SetPhase(Detector::Phase::A, false);
+		Detector::SetPhase(Detector::Phase::A, true);
 		break;
 	case 5:
 		LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::High);
 		LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::Low);
 		LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Idle);
-		Detector::SetPhase(Detector::Phase::C, true);
+		Detector::SetPhase(Detector::Phase::C, false);
 		break;
 	}
 
-	if (state == State::Running) {
-		Timer::Schedule(timeBetweenCommutations * 5,
-				[]() {
-					Detector::Disable();
-					LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Idle);
-					LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::Idle);
-					LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Idle);
+	if (state == Driver::State::Running) {
+		uint32_t timeout = 20000;
+		if(timeBetweenCommutations * 5 > timeout) {
+			timeout = timeBetweenCommutations * 5;
+		}
+//		Timer::Schedule(timeout,
+//				[]() {
+//					Log::WriteChar('T');
 
-					state = State::Stopped;
-					Log::Uart(Log::Lvl::Err, "Timed out while waiting for commutation, motor stopped");
-				});
+//					Detector::Disable();
+//					LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Idle);
+//					LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::Idle);
+//					LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Idle);
+//
+//					state = Driver::State::Stopped;
+//					Log::Uart(Log::Lvl::Err, "Timed out while waiting for commutation, motor stopped");
+//					Timer::Schedule(100000, [](){
+//
+//					});
+//		});
 	}
 }
 
 static void NextStartStep() {
+	Log::WriteChar('N');
+
 //	Log::Uart(Log::Lvl::Dbg, "Start step %d", StartStep);
 	CommutationStep = (CommutationStep + 1) % 6;
 	Detector::Disable();
 	SetStep(CommutationStep);
-	if(state == State::Running) {
+	if(state == Driver::State::Running) {
 		// Successfully started, enter normal operation mode
 		Detector::Enable(CrossingCallback);
 		return;
@@ -124,7 +131,7 @@ static void NextStartStep() {
 	StartTime += length;
 
 	if(StartSteps >= 10) {
-		Detector::Enable(CrossingCallback, 10);
+		Detector::Enable(CrossingCallback, 50);
 	}
 	StartSteps++;
 
@@ -136,7 +143,7 @@ static void NextStartStep() {
 		LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Idle);
 		LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::Idle);
 		LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Idle);
-		state = State::Stopped;
+		state = Driver::State::Stopped;
 		return;
 	}
 
@@ -144,12 +151,14 @@ static void NextStartStep() {
 }
 
 static void CrossingCallback(uint32_t usSinceLast, uint32_t timeSinceCrossing) {
+	Log::WriteChar('B');
+	UNUSED(timeSinceCrossing);
 //	HAL_GPIO_WritePin(TRIGGER_GPIO_Port, TRIGGER_Pin, GPIO_PIN_RESET);
-	if (state == State::Starting) {
-		state = State::Running;
+	if (state == Driver::State::Starting) {
+		state = Driver::State::Running;
 		Log::Uart(Log::Lvl::Inf, "Motor started after %luus", StartTime);
-//		Detector::Disable();
-//		timeBetweenCommutations = StartSequence(StartTime);
+		Detector::Disable();
+		timeBetweenCommutations = StartSequence(StartTime);
 //		return;
 		// abort next scheduled start step
 		Timer::Abort();
@@ -168,12 +177,25 @@ static void CrossingCallback(uint32_t usSinceLast, uint32_t timeSinceCrossing) {
 	// Calculate time until next 30° rotation
 	uint32_t TimeToNextCommutation = usSinceLast / 2;// - timeSinceCrossing;
 	Timer::Schedule(TimeToNextCommutation, []() {
+		Log::WriteChar('M');
 		SetStep(CommutationStep);
 		Detector::Enable(CrossingCallback);
 	});
 //	Log::Uart(Log::Lvl::Inf, "next comm in %luus", TimeToNextCommutation);
 
 	timeBetweenCommutations = usSinceLast;
+}
+
+static void IdleTrackingCB(uint8_t pos, bool valid) {
+	CommutationStep = pos;
+	if(!valid && state != Driver::State::Stopped) {
+		// motor is running too slow for idle tracking, consider it stopped
+		state = Driver::State::Stopped;
+		Log::Uart(Log::Lvl::Inf, "...stopped");
+	} else if(valid && state == Driver::State::Stopped) {
+		state = Driver::State::Stopping;
+		Log::Uart(Log::Lvl::Inf, "Motor started by external force");
+	}
 }
 
 HAL::BLDC::Driver::Driver() {
@@ -187,6 +209,8 @@ HAL::BLDC::Driver::Driver() {
 	CommutationStep = 0;
 
 	state = State::Stopped;
+
+	Detector::EnableIdleTracking(IdleTrackingCB);
 }
 
 void HAL::BLDC::Driver::SetPWM(int16_t promille) {
@@ -194,21 +218,38 @@ void HAL::BLDC::Driver::SetPWM(int16_t promille) {
 }
 
 void HAL::BLDC::Driver::InitiateStart() {
-	Log::Uart(Log::Lvl::Dbg, "Initiating start sequence");
-	state = State::Starting;
-	uint8_t sector = InductanceSensing::RotorPosition();
-	StartTime = 0;
-	StartSteps = 0;
-	if (sector == 0) {
-		// unable to determine rotor position, use align and go
-		LowLevel::SetPWM(30);
-		Detector::Disable();
+	if (state == State::Stopped) {
+		Log::Uart(Log::Lvl::Inf, "Initiating start sequence");
+		state = State::Starting;
+		uint8_t sector;
+		do {
+			sector = InductanceSensing::RotorPosition();
+		} while (!sector);
+		StartTime = 0;
+		StartSteps = 0;
+		if (sector == 0) {
+			// unable to determine rotor position, use align and go
+			LowLevel::SetPWM(30);
+			Detector::Disable();
+			SetStep(CommutationStep);
+			Timer::Schedule(1000000, NextStartStep);
+		} else {
+			SetPWM(100);
+			// rotor position determined, modify next commutation step accordingly
+			CommutationStep = (7 - sector) % 6;
+//		SetStep(CommutationStep);
+//		Detector::Enable(CrossingCallback);
+			NextStartStep();
+		}
+	} else if (state == State::Stopping){
+		state = State::Running;
+		timeBetweenCommutations = 100000;
+		Log::Uart(Log::Lvl::Inf, "Repower idling motor");
+		CommutationStep = (CommutationStep + 2) % 6;
+		LowLevel::SetPWM(StartFinalPWM);
 		SetStep(CommutationStep);
-		Timer::Schedule(1000000, NextStartStep);
-	} else {
-		// rotor position determined, modify next commutation step accordingly
-		CommutationStep = (7 - sector) % 6;
-		NextStartStep();
+		Detector::DisableIdleTracking();
+		Detector::Enable(CrossingCallback);
 	}
 }
 
@@ -217,10 +258,17 @@ void HAL::BLDC::Driver::RegisterIncCallback(IncCallback c, void* ptr) {
 	IncPtr = ptr;
 }
 
+Driver::State HAL::BLDC::Driver::GetState() {
+	return state;
+}
+
 void HAL::BLDC::Driver::RegisterADCCallback(ADCCallback c, void* ptr) {
+	UNUSED(c);
+	UNUSED(ptr);
 }
 
 static void Idle() {
+	Log::Uart(Log::Lvl::Inf, "Idle");
 	LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Idle);
 	LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::Idle);
 	LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Idle);
@@ -229,12 +277,17 @@ static void Idle() {
 
 void HAL::BLDC::Driver::FreeRunning() {
 	Timer::Abort();
+	Detector::Disable();
 	Idle();
-	state = State::Stopped;
+	state = State::Stopping;
+	Log::Uart(Log::Lvl::Inf, "Freerunning...");
+	Detector::EnableIdleTracking(IdleTrackingCB);
 }
 
 void HAL::BLDC::Driver::Stop() {
+	Log::Uart(Log::Lvl::Inf, "Stopping motor");
 	Timer::Abort();
+	Detector::Disable();
 	LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Low);
 	LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::Low);
 	LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Low);

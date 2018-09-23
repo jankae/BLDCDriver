@@ -10,10 +10,8 @@
 
 #include "Tests.hpp"
 
-extern uint32_t timeUS;
-
 void Start() {
-	Log::Init(Log::Lvl::Inf);
+	Log::Init(Log::Lvl::Crt);
 
 	HAL::BLDC::Detector::Init();
 	HAL::BLDC::PowerADC::Init();
@@ -26,8 +24,10 @@ void Start() {
 //	Test::ManualCommutation();
 //	Test::InductanceSense();
 	Test::MotorStart();
+//	Test::MotorManualStart();
 //	Test::TimerTest();
 //	Test::SetMidPWM();
+//	HAL::BLDC::Detector::Enable(nullptr);
 //	Test::DifferentPWMs();
 //	HAL::BLDC::Detector::Enable(HAL::BLDC::Detector::Phase::C, nullptr);
 	while(1);

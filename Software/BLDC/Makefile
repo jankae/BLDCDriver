@@ -176,7 +176,7 @@ $(BUILD_DIR)/%.o: %.s Makefile | $(BUILD_DIR)
 $(BUILD_DIR)/$(TARGET).elf: $(OBJECTS) Makefile | $(BINARY_DIR)
 	@echo [LD] $@
 	@$(CC) $(OBJECTS) $(LDFLAGS) -o $@
-	$(SZ) $@
+	$(SZ) -B $@
 
 $(BUILD_DIR)/%.hex: $(BUILD_DIR)/%.elf | $(BUILD_DIR)
 	@echo [OBJCPY] $@

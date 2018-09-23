@@ -4,7 +4,7 @@
 
 namespace Log {
 
-enum class Lvl {
+enum class Lvl : uint8_t {
 	Dbg = 0,
 	Inf = 1,
 	Wrn = 2,
@@ -12,7 +12,7 @@ enum class Lvl {
 	Crt = 4,
 };
 
-enum class Class {
+enum class Class : uint8_t {
 	BLDC,
 	// Max has to be last
 	MAX
@@ -24,5 +24,6 @@ void SetLevel(enum Class cls, enum Lvl lvl);
 void Out(enum Class cls, enum Lvl lvl, const char *fmt, ...);
 
 void Uart(enum Lvl lvl, const char *fmt, ...);
+void WriteChar(char c);
 
 }
