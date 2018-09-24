@@ -83,7 +83,7 @@ static void ConfigureHardware(uint32_t *SettingBuffer, uint16_t *CurrentBuf) {
 	LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Idle);
 
 	PowerADC::Pause();
-	Detector::Disable();
+//	Detector::Disable();
 
     HAL_NVIC_SetPriority(TIM1_UP_TIM16_IRQn, 0 ,0);
     HAL_NVIC_EnableIRQ(TIM1_UP_TIM16_IRQn);
@@ -194,6 +194,9 @@ uint16_t HAL::BLDC::InductanceSensing::RotorPosition() {
 		section = 5;
 	} else if(!I_II && !III_IV && !V_VI) {
 		section = 6;
+	} else {
+		Log::Uart(Log::Lvl::Err, "Inductance sensing failed: %d %d %d %d %d %d",
+				I[0], I[1], I[2], I[3], I[4], I[5]);
 	}
 	return section;
 }

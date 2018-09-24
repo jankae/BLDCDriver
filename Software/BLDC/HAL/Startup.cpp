@@ -11,16 +11,16 @@
 #include "Tests.hpp"
 
 void Start() {
-	Log::Init(Log::Lvl::Crt);
+	Log::Init(Log::Lvl::Dbg);
 
-	HAL::BLDC::Detector::Init();
+//	HAL::BLDC::Detector::Init();
 	HAL::BLDC::PowerADC::Init();
 	HAL::BLDC::LowLevel::Init();
 
 	vTaskDelay(100);
 	Log::Uart(Log::Lvl::Inf, "Start");
 
-	vTaskDelay(2000);
+	vTaskDelay(500);
 //	Test::ManualCommutation();
 //	Test::InductanceSense();
 	Test::MotorStart();

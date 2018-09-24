@@ -84,11 +84,12 @@ void HAL::BLDC::LowLevel::SetPhase(Phase p, State s) {
 
 #include "Detector.hpp"
 #include "PowerADC.hpp"
+#include "Driver.hpp"
 
 extern "C" {
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc) {
 	if(hadc->Instance == ADC1) {
-		HAL::BLDC::Detector::DMAComplete();
+		HAL::BLDC::Driver::DMAComplete();
 	} else if(hadc->Instance == ADC2) {
 		HAL::BLDC::PowerADC::DMAComplete();
 	}
@@ -96,7 +97,7 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc) {
 
 void HAL_ADC_ConvHalfCpltCallback(ADC_HandleTypeDef* hadc) {
 	if(hadc->Instance == ADC1) {
-		HAL::BLDC::Detector::DMAHalfComplete();
+		HAL::BLDC::Driver::DMAHalfComplete();
 	} else if(hadc->Instance == ADC2) {
 		HAL::BLDC::PowerADC::DMAHalfComplete();
 	}
