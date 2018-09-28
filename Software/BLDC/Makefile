@@ -131,7 +131,8 @@ endif
 
 
 # Generate dependency information
-CFLAGS += -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@:%.o=%.d)"
+CFLAGS += -MMD 
+CXXFLAGS += -MMD
 
 
 #######################################
@@ -198,6 +199,8 @@ clean:
 #######################################
 # dependencies
 #######################################
--include $(shell mkdir .dep 2>/dev/null) $(wildcard .dep/*)
+DEPS := $(OBJECTS:.o=.d)
+
+-include $(DEPS)
 
 # *** EOF ***

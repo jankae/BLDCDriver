@@ -16,7 +16,8 @@ public:
 		Stopped,
 		Align,
 		Starting,
-		Powered,
+		Powered_PreZero,
+		Powered_PastZero,
 		Idle,
 		Calibrating,
 	};
@@ -63,6 +64,8 @@ private:
 
 	State state, stateBuf;
 	uint32_t cnt;
+	uint32_t timeToZero;
+	bool DetectorArmed;
 
 	LowLevel::Phase nPhaseHigh, nPhaseIdle;
 

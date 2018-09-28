@@ -31,8 +31,8 @@ void Test::DifferentPWMs(void) {
 void Test::MotorStart(void) {
 	Log::Uart(Log::Lvl::Inf, "Test, attempting to start motor");
 	Driver d;
-	d.ZeroCalibration();
-	vTaskDelay(12000);
+//	d.ZeroCalibration();
+//	vTaskDelay(12000);
 
 
 	while (1) {

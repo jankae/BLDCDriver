@@ -40,25 +40,6 @@ static constexpr uint32_t StartMaxPeriod = 10000;
 static constexpr uint16_t StartFinalPWM = 101;
 static constexpr uint16_t StartMinPWM = 100;
 
-static uint32_t StartSequence(uint32_t time) {
-	constexpr uint32_t FinalPeriod = 1000000UL
-			/ (StartFinalRPM * 6 * MotorPoles / 2 / 60);
-	constexpr uint64_t dividend = FinalPeriod * StartSequenceLength;
-	uint64_t period = dividend / time;
-	if (time == 0 || period > StartMaxPeriod)
-		return StartMaxPeriod;
-	else
-		return period;
-}
-
-static uint16_t StartPWM(uint32_t time) {
-	constexpr uint32_t divisor = StartSequenceLength / (StartFinalPWM - StartMinPWM);
-	return StartMinPWM + time / divisor;
-}
-
-static uint32_t timeBetweenCommutations;
-
-static void CrossingCallback(uint32_t usSinceLast, uint32_t timeSinceCrossing);
 void HAL::BLDC::Driver::SetStep(uint8_t step) {
 //	HAL_GPIO_WritePin(TRIGGER_GPIO_Port, TRIGGER_Pin, GPIO_PIN_SET);
 //	HAL_GPIO_TogglePin(TRIGGER_GPIO_Port, TRIGGER_Pin);
@@ -112,118 +93,11 @@ void HAL::BLDC::Driver::SetStep(uint8_t step) {
 //		Detector::SetPhase(Detector::Phase::C, false);
 		break;
 	}
-
-//	if (state == Driver::State::Powered) {
-//		uint32_t timeout = 20000;
-//		if(timeBetweenCommutations * 5 > timeout) {
-//			timeout = timeBetweenCommutations * 5;
-//		}
-//		Timer::Schedule(timeout,
-//				[]() {
-//					Log::WriteChar('T');
-
-//					Detector::Disable();
-//					LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Idle);
-//					LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::Idle);
-//					LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Idle);
-//
-//					state = Driver::State::Stopped;
-//					Log::Uart(Log::Lvl::Err, "Timed out while waiting for commutation, motor stopped");
-//					Timer::Schedule(100000, [](){
-//
-//					});
-//		});
-//	}
 }
-
-//static void NextStartStep() {
-//	Log::WriteChar('N');
-//
-////	Log::Uart(Log::Lvl::Dbg, "Start step %d", StartStep);
-//	CommutationStep = (CommutationStep + 1) % 6;
-//	Detector::Disable();
-//	SetStep(CommutationStep);
-//	if(state == Driver::State::Running) {
-//		// Successfully started, enter normal operation mode
-//		Detector::Enable(CrossingCallback);
-//		return;
-//	}
-//	// Schedule next start step
-//	auto length = StartSequence(StartTime);
-//	LowLevel::SetPWM(StartPWM(StartTime));
-//	StartTime += length;
-//
-//	if(StartSteps >= 10) {
-//		Detector::Enable(CrossingCallback, 50);
-//	}
-//	StartSteps++;
-//
-//	if (StartTime >= StartSequenceLength) {
-//		// TODO Start attempt failed
-//		Detector::Disable();
-//		Log::Uart(Log::Lvl::Err, "Failed to start motor");
-//		LowLevel::SetPWM(0);
-//		LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Idle);
-//		LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::Idle);
-//		LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Idle);
-//		state = Driver::State::Stopped;
-//		return;
-//	}
-//
-//	Timer::Schedule(length, NextStartStep);
-//}
-
-//static void CrossingCallback(uint32_t usSinceLast, uint32_t timeSinceCrossing) {
-//	Log::WriteChar('B');
-//	UNUSED(timeSinceCrossing);
-////	HAL_GPIO_WritePin(TRIGGER_GPIO_Port, TRIGGER_Pin, GPIO_PIN_RESET);
-//	if (state == Driver::State::Starting) {
-//		state = Driver::State::Running;
-//		Log::Uart(Log::Lvl::Inf, "Motor started after %luus", StartTime);
-//		Detector::Disable();
-//		timeBetweenCommutations = StartSequence(StartTime);
-////		return;
-//		// abort next scheduled start step
-//		Timer::Abort();
-//		LowLevel::SetPWM(100);
-//		// no previous commutation known, take a guess from the start sequence
-//		usSinceLast = StartSequence(StartTime);
-////		timeSinceCrossing = StartSequence(StartTime) / 2;
-//	} else if (IncCB) {
-//		// motor is already running, report back crossing intervals to controller
-//		IncCB(IncPtr, usSinceLast);
-//	}
-//
-//	// Disable detector until next commutation step
-//	Detector::Disable();
-//	CommutationStep = (CommutationStep + 1) % 6;
-//	// Calculate time until next 30° rotation
-//	uint32_t TimeToNextCommutation = usSinceLast / 2;// - timeSinceCrossing;
-//	Timer::Schedule(TimeToNextCommutation, []() {
-//		Log::WriteChar('M');
-//		SetStep(CommutationStep);
-//		Detector::Enable(CrossingCallback);
-//	});
-////	Log::Uart(Log::Lvl::Inf, "next comm in %luus", TimeToNextCommutation);
-//
-//	timeBetweenCommutations = usSinceLast;
-//}
-//
-//static void IdleTrackingCB(uint8_t pos, bool valid) {
-//	CommutationStep = pos;
-//	if(!valid && state != Driver::State::Stopped) {
-//		// motor is running too slow for idle tracking, consider it stopped
-//		state = Driver::State::Stopped;
-//		Log::Uart(Log::Lvl::Inf, "...stopped");
-//	} else if(valid && state == Driver::State::Stopped) {
-//		state = Driver::State::Stopping;
-//		Log::Uart(Log::Lvl::Inf, "Motor started by external force");
-//	}
-//}
 
 #define NextState(s) do { state = s; cnt = 0;} while(0);
 
-#define DRIVER_BUFFER
+//#define DRIVER_BUFFER
 #ifdef DRIVER_BUFFER
 Fifo<uint16_t, 1500> buffer __attribute__ ((section (".ccmram")));
 #endif
@@ -245,13 +119,13 @@ void HAL::BLDC::Driver::NewPhaseVoltages(uint16_t *data) {
 		// do not apply any voltages to the phase terminals
 		SetIdle();
 #ifdef DRIVER_BUFFER
-		if(cnt % 100 == 0) {
+		if(cnt % 30 == 0) {
 			if(buffer.getLevel() > 0) {
 				uint16_t A = 0, B = 0, C = 0;
 				buffer.dequeue(A);
-				buffer.dequeue(B);
-				buffer.dequeue(C);
-				Log::Uart(Log::Lvl::Inf, " %d %d %d", A, B, C);
+//				buffer.dequeue(B);
+//				buffer.dequeue(C);
+				Log::Uart(Log::Lvl::Inf, " %d ", A);
 			}
 		}
 #endif
@@ -320,72 +194,50 @@ void HAL::BLDC::Driver::NewPhaseVoltages(uint16_t *data) {
 			Log::Uart(Log::Lvl::Inf, "Powering motor...");
 			IncRotorPos();
 			LowLevel::SetPWM(minPWM);
-			NextState(State::Powered);
+			NextState(State::Powered_PreZero);
 		}
 	}
 		break;
-	case State::Starting:
+	case State::Powered_PreZero:
 	{
+		constexpr uint16_t nPulsesSkip = 4;
+		constexpr uint16_t ZeroThreshold = 10;
+		constexpr uint32_t timeoutThresh = CommutationTimeoutms * HzPWM / 1000;
 
-	}
-	case State::Powered:
-	{
-		if (RotorPos == -1) {
-			// somehow lost the rotor position while powered -> restart motor
-			NextState(State::Align);
-			break;
-		}
-		static uint32_t integral;
-		constexpr uint16_t nPulsesSkip = 10;
 		if (cnt == 1) {
 			SetStep(RotorPos);
-			integral = 0;
 		} else if (cnt > nPulsesSkip) {
 			bool rising = (dir == Direction::Forward) ^ (RotorPos & 0x01);
+			uint16_t compare = data[(int) nPhaseIdle];
 
-			// calculate corrected common zero
-			const uint16_t zero = (uint32_t) data[(int) nPhaseHigh]
-					* ZeroCal[RotorPos] / 65536UL;
-
-			int16_t diff = data[(int) nPhaseIdle] - zero;
-			if (!rising) {
-				diff = -diff;
-			}
-			// negative diff at the start of the commutation cycle, positive at the end
-			if (diff < 0) {
-				integral = 0;
-			} else {
-				integral += diff;
-			}
-
-#ifdef DRIVER_BUFFER
-			if (buffer.getSpace() >= 3) {
-				buffer.enqueue(data[(int) nPhaseIdle]);
-				buffer.enqueue(zero);
-				buffer.enqueue(integral);
-			}
-#endif
-
-			constexpr uint32_t integralThresh = 1000;
-			constexpr uint32_t timeoutThresh = CommutationTimeoutms * HzPWM
-					/ 1000;
-			if (integral >= integralThresh) {
-				// move on to the next commutation step
-				uint16_t timeBetweenCommutations = 50 * cnt;
-				uint32_t commutationsPerMinute = 60000000 / timeBetweenCommutations;
-				uint16_t rpm = commutationsPerMinute / 36;
-				static uint8_t t;
-				if ((t++) % 360 == 0) {
-					Log::Uart(Log::Lvl::Dbg, "RPM: %d", rpm);
+			if (DetectorArmed) {
+				if ((compare == 0 && !rising)
+						|| (compare >= ZeroThreshold && rising)) {
+					// crossing detected
+					timeToZero = cnt;
+					NextState(State::Powered_PastZero);
 				}
-				IncRotorPos();
-				NextState(State::Powered);
-			} else if (cnt > timeoutThresh) {
+			} else {
+				if ((compare == 0 && rising)
+						|| (compare > 0 && !rising)) {
+					DetectorArmed = true;
+				}
+			}
+			if(cnt >= timeoutThresh) {
 				// failed to detect the next commutation in time, motor probably stalled
 				Log::Uart(Log::Lvl::Wrn, "Commutation timed out");
 				RotorPos = -1;
 				NextState(State::Idle);
 			}
+		}
+	}
+	break;
+	case State::Powered_PastZero:
+	{
+		if(cnt >= timeToZero) {
+			// next commutation is due
+			IncRotorPos();
+			NextState(State::Powered_PreZero);
 		}
 	}
 		break;
@@ -423,6 +275,8 @@ void HAL::BLDC::Driver::NewPhaseVoltages(uint16_t *data) {
 			sumMiddle += data[(int) nPhaseIdle];
 		}
 	}
+		break;
+	default:
 		break;
 	}
 }
@@ -463,7 +317,8 @@ HAL::BLDC::Driver::Driver() {
 	constexpr uint16_t OverallTimerCycles = ADCOverallCycles * TimerClockMHz / ADCClockMHz;
 	constexpr uint16_t minPWMValTimCnt = 1600 * minPWM / 1000;
 
-	TIM1->CCR4 = minPWMValTimCnt - OverallTimerCycles;
+//	TIM1->CCR4 = minPWMValTimCnt - OverallTimerCycles;
+	TIM1->CCR4 = 1600 - OverallTimerCycles;
 	HAL_TIM_OC_Start(&htim1, TIM_CHANNEL_4);
 
 	Inst = this;
@@ -474,42 +329,6 @@ HAL::BLDC::Driver::Driver() {
 void HAL::BLDC::Driver::SetPWM(int16_t promille) {
 	LowLevel::SetPWM(promille);
 }
-
-//void HAL::BLDC::Driver::InitiateStart() {
-//	if (state == State::Stopped) {
-//		Log::Uart(Log::Lvl::Inf, "Initiating start sequence");
-//		state = State::Starting;
-//		uint8_t sector;
-//		do {
-//			sector = InductanceSensing::RotorPosition();
-//		} while (!sector);
-//		StartTime = 0;
-//		StartSteps = 0;
-//		if (sector == 0) {
-//			// unable to determine rotor position, use align and go
-//			LowLevel::SetPWM(30);
-//			Detector::Disable();
-//			SetStep(CommutationStep);
-//			Timer::Schedule(1000000, NextStartStep);
-//		} else {
-//			SetPWM(100);
-//			// rotor position determined, modify next commutation step accordingly
-//			CommutationStep = (7 - sector) % 6;
-////		SetStep(CommutationStep);
-////		Detector::Enable(CrossingCallback);
-//			NextStartStep();
-//		}
-//	} else if (state == State::Stopping){
-//		state = State::Running;
-//		timeBetweenCommutations = 100000;
-//		Log::Uart(Log::Lvl::Inf, "Repower idling motor");
-//		CommutationStep = (CommutationStep + 2) % 6;
-//		LowLevel::SetPWM(StartFinalPWM);
-//		SetStep(CommutationStep);
-//		Detector::DisableIdleTracking();
-//		Detector::Enable(CrossingCallback);
-//	}
-//}
 
 void HAL::BLDC::Driver::RegisterIncCallback(IncCallback c, void* ptr) {
 	IncCB = c;
@@ -585,7 +404,8 @@ void HAL::BLDC::Driver::InitiateStart() {
 		}
 	}
 	LowLevel::SetPWM(minPWM);
-	stateBuf = State::Powered;
+	DetectorArmed = false;
+	stateBuf = State::Powered_PreZero;
 }
 
 void HAL::BLDC::Driver::ZeroCalibration() {
