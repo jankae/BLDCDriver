@@ -10,4 +10,6 @@ void PowerADC();
 
 void ManualCommutation();
 
+//void PersistenceTest();
+
 }

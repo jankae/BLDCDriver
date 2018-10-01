@@ -6,10 +6,13 @@
 #include "FreeRTOS.h"
 #include "task.h"
 #include "PowerADC.hpp"
+#include "Persistance.hpp"
 
 #include "Tests.hpp"
 
 void Start() {
+	Persistance::Load();
+
 	Log::Init(Log::Lvl::Inf);
 
 	HAL::BLDC::PowerADC::Init();
@@ -19,10 +22,12 @@ void Start() {
 	Log::Uart(Log::Lvl::Inf, "Start");
 
 	vTaskDelay(500);
-//	Test::PowerADC();
+
+//	Test::PersistenceTest();
+	Test::PowerADC();
 //	Test::ManualCommutation();
 //	Test::InductanceSense();
-	Test::MotorFunctions();
+//	Test::MotorFunctions();
 //	Test::MotorManualStart();
 //	Test::DifferentPWMs();
 	while(1);

@@ -60,7 +60,6 @@ public:
 private:
 	static Driver *Inst;
 	static constexpr uint32_t minPWM = 100;
-	static constexpr uint32_t HzPWM = 20000;
 	static constexpr uint32_t CommutationTimeoutms = 50;
 	void NewPhaseVoltages(uint16_t *data);
 	void SetStep(uint8_t step);

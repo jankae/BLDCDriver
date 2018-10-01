@@ -41,9 +41,12 @@ _Min_Stack_Size = 0x400; /* required amount of stack */
 /* Specify the memory areas */
 MEMORY
 {
-RAM (xrw)      : ORIGIN = 0x20000000, LENGTH = 12K
-CCMRAM (rw)      : ORIGIN = 0x10000000, LENGTH = 4K
-FLASH (rx)      : ORIGIN = 0x8000000, LENGTH = 64K
+RAM (xrw)       : ORIGIN = 0x20000000, LENGTH = 12K
+CCMRAM (rw)     : ORIGIN = 0x10000000, LENGTH = 2K
+CCMPERSIST (rw)	: ORIGIN = 0x10000800, LENGTH = 2K
+FLASH (rx)      : ORIGIN = 0x8000000, LENGTH = 62K
+/* Reserve the last page for persistance module */
+FLPERSIST		: ORIGIN = 0x800F800, LENGTH = 2K
 }
 
 /* Define output sections */
@@ -144,7 +147,26 @@ SECTIONS
     . = ALIGN(4);
     _eccmram = .;       /* create a global symbol at ccmram end */
   } >CCMRAM AT> FLASH
+  
+  _siccmpersist = LOADADDR(.ccmpersist);
 
+  .ccmpersist :
+  {
+    . = ALIGN(4);
+    _sccmpersist = .;       /* create a global symbol at ccmram start */
+    *(.ccmpersist)
+    *(.ccmpersist*)
+    
+    . = ALIGN(4);
+    _eccmpersist = .;       /* create a global symbol at ccmram end */
+  } >CCMPERSIST AT> FLASH
+
+  .flashpersist :
+  {
+   . = ALIGN(4);
+   _sflashpersist = .;
+   . = ALIGN(4);
+  } > FLPERSIST AT> FLASH
   
   /* Uninitialized data section */
   . = ALIGN(4);

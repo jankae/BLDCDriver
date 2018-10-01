@@ -4,6 +4,7 @@
 #include "stm32f303x8.h"
 
 #include "Logging.hpp"
+#include "Defines.hpp"
 
 static constexpr uint8_t PosFromMask(uint32_t mask) {
 	uint8_t pos = 0;
@@ -23,7 +24,6 @@ extern ADC_HandleTypeDef hadc1;
 extern TIM_HandleTypeDef htim1;
 extern TIM_HandleTypeDef htim2;
 
-constexpr uint16_t MaxPWM = 1600;
 static uint16_t pwmVal;
 
 static void AdjustSamplingToPWM(uint16_t pwm) {
@@ -79,7 +79,7 @@ void HAL::BLDC::LowLevel::Init() {
 }
 
 void HAL::BLDC::LowLevel::SetPWM(int16_t promille) {
-	pwmVal = (int32_t) promille * MaxPWM / 1000;
+	pwmVal = (int32_t) promille * Defines::PWM_max / 1000;
 }
 
 void HAL::BLDC::LowLevel::SetPhase(Phase p, State s) {

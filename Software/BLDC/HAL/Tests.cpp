@@ -8,6 +8,7 @@
 #include "Driver.hpp"
 #include "InductanceSensing.hpp"
 #include "PowerADC.hpp"
+#include "Persistance.hpp"
 
 using namespace HAL::BLDC;
 
@@ -194,10 +195,13 @@ void Test::MotorManualStart(void) {
 }
 
 void Test::PowerADC() {
-	vTaskDelay(1000);
-	HAL::BLDC::PowerADC::Pause();
-	PowerADC::PrintBuffer();
-	PowerADC::Resume();
+	Driver d;
+	d.InitiateStart();
+	while(1) {
+		auto m = HAL::BLDC::PowerADC::Get();
+		Log::Uart(Log::Lvl::Inf, "U: %lu, I: %ld", m.voltage, m.current);
+		vTaskDelay(5);
+	}
 }
 
 void Test::ManualCommutation() {
@@ -246,3 +250,18 @@ void Test::ManualCommutation() {
 	LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::Idle);
 	LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Idle);
 }
+
+//static uint32_t testdata[4] __attribute__ ((section (".ccmpersist")));
+//
+//void Test::PersistenceTest() {
+//	Persistance::Load();
+//	Log::Uart(Log::Lvl::Inf, "Previous data: %x %x %x %x", testdata[0], testdata[1], testdata[2], testdata[3]);
+//	testdata[0] = 0xdeadbeef;
+//	testdata[1] = 0xdeadbeef;
+//	testdata[2] = 0xdeadbeef;
+//	testdata[3] = 0xdeadbeef;
+//	Log::Uart(Log::Lvl::Inf, "Set data: %x %x %x %x", testdata[0], testdata[1], testdata[2], testdata[3]);
+//	Persistance::Store();
+//	Persistance::Load();
+//	Log::Uart(Log::Lvl::Inf, "Afterwards data: %x %x %x %x", testdata[0], testdata[1], testdata[2], testdata[3]);
+//}

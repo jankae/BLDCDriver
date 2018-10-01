@@ -8,6 +8,7 @@
 #include "InductanceSensing.hpp"
 #include "fifo.hpp"
 #include "PowerADC.hpp"
+#include "Defines.hpp"
 
 using namespace HAL::BLDC;
 
@@ -176,7 +177,7 @@ void HAL::BLDC::Driver::NewPhaseVoltages(uint16_t *data) {
 	{
 		// align the rotor to a known position prior to starting the motor
 		constexpr uint32_t msHold = 1000;
-		constexpr uint32_t cntThresh = msHold * HzPWM / 1000;
+		constexpr uint32_t cntThresh = msHold * Defines::PWM_Frequency / 1000;
 		constexpr uint16_t alignPWM = minPWM / 2;
 		if (cnt == 1) {
 			Log::Uart(Log::Lvl::Inf, "Aligning motor...");
@@ -194,7 +195,8 @@ void HAL::BLDC::Driver::NewPhaseVoltages(uint16_t *data) {
 	{
 		constexpr uint16_t nPulsesSkip = 2;
 		constexpr uint16_t ZeroThreshold = 10;
-		constexpr uint32_t timeoutThresh = CommutationTimeoutms * HzPWM / 1000;
+		constexpr uint32_t timeoutThresh = CommutationTimeoutms
+				* Defines::PWM_Frequency / 1000;
 
 		const uint16_t zero = data[(int) nPhaseHigh] / 2;
 		static bool above = false;
