@@ -43,10 +43,10 @@ static void AdjustSamplingToPWM(uint16_t pwm) {
 	static bool PWMOnSampling = false;
 	if (PWMOnSampling && pwm <= lowPWMThreshold) {
 		PWMOnSampling = false;
-		Log::Uart(Log::Lvl::Inf, "Switching to off phase sampling");
+		Log::Uart(Log::Lvl::Dbg, "Switching to off phase sampling");
 	} else if (!PWMOnSampling && pwm > highPWMThreshold) {
 		PWMOnSampling = true;
-		Log::Uart(Log::Lvl::Inf, "Switching to on phase sampling");
+		Log::Uart(Log::Lvl::Dbg, "Switching to on phase sampling");
 	}
 	if (PWMOnSampling) {
 		TIM1->CCR4 = PWMOnSamplingPoint;
@@ -79,14 +79,10 @@ void HAL::BLDC::LowLevel::Init() {
 }
 
 void HAL::BLDC::LowLevel::SetPWM(int16_t promille) {
-	// directly modify PWM registers without HAL overhead
 	pwmVal = (int32_t) promille * MaxPWM / 1000;
 }
 
 void HAL::BLDC::LowLevel::SetPhase(Phase p, State s) {
-//	TIM_OC_InitTypeDef sConfigOC;
-//	GPIO_InitTypeDef GPIO_InitStruct;
-
 	GPIO_TypeDef *gpio = Ports[(int) p];
 	uint16_t pin = Pins[(int) p];
 

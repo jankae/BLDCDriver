@@ -11,14 +11,6 @@
 
 using namespace HAL::BLDC;
 
-void Test::SetMidPWM(void) {
-	Log::Uart(Log::Lvl::Inf, "Test, setting mid PWM");
-	LowLevel::SetPWM(100);
-	LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::High);
-	LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::High);
-	LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::High);
-}
-
 void Test::DifferentPWMs(void) {
 	Log::Uart(Log::Lvl::Inf, "Test, setting different PWMs");
 	LowLevel::SetPWM(100);
@@ -55,32 +47,6 @@ void Test::MotorFunctions(void) {
 	}
 	Log::Uart(Log::Lvl::Inf, "Driver test passed");
 
-//	{
-//		/* Repower during idle Test */
-//		for(uint16_t i = 100;i>=10;i-= 10) {
-//			if(!Start(d)) {
-//				return;
-//			}
-//			vTaskDelay(200);
-//			d.SetPWM(200);
-//			vTaskDelay(300);
-//			d.FreeRunning();
-//			vTaskDelay(i);
-//			d.InitiateStart();
-//			vTaskDelay(1000);
-//			if(d.IsRunning()) {
-//				Log::Uart(Log::Lvl::Inf, "Repowering after %dms worked", i);
-//			} else {
-//				Log::Uart(Log::Lvl::Inf, "Repowering after %dms failed", i);
-//			}
-//			d.FreeRunning();
-//			vTaskDelay(1000);
-//			d.Stop();
-//			vTaskDelay(1000);
-//		}
-//	}
-//	return;
-
 	{
 		/* Speed change Test */
 		constexpr uint16_t maxTestPWM = 500;
@@ -95,7 +61,7 @@ void Test::MotorFunctions(void) {
 		}
 
 		vTaskDelay(1000);
-		d.SetPWM(250);
+		d.SetPWM(300);
 		vTaskDelay(500);
 		HAL_GPIO_WritePin(TRIGGER_GPIO_Port, TRIGGER_Pin, GPIO_PIN_SET);
 		d.SetPWM(100);
@@ -160,44 +126,36 @@ void Test::MotorFunctions(void) {
 }
 
 static void SetStep(uint8_t step) {
-//	HAL_GPIO_WritePin(TRIGGER_GPIO_Port, TRIGGER_Pin, GPIO_PIN_SET);
-//	HAL_GPIO_TogglePin(TRIGGER_GPIO_Port, TRIGGER_Pin);
 	switch (step) {
 	case 0:
 		LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::High);
 		LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::Idle);
 		LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Low);
-//		Detector::SetPhase(Detector::Phase::B, true);
 		break;
 	case 1:
 		LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Idle);
 		LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::High);
 		LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Low);
-//		Detector::SetPhase(Detector::Phase::A, false);
 		break;
 	case 2:
 		LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Low);
 		LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::High);
 		LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Idle);
-//		Detector::SetPhase(Detector::Phase::C, true);
 		break;
 	case 3:
 		LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Low);
 		LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::Idle);
 		LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::High);
-//		Detector::SetPhase(Detector::Phase::B, false);
 		break;
 	case 4:
 		LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Idle);
 		LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::Low);
 		LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::High);
-//		Detector::SetPhase(Detector::Phase::A, true);
 		break;
 	case 5:
 		LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::High);
 		LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::Low);
 		LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Idle);
-//		Detector::SetPhase(Detector::Phase::C, false);
 		break;
 	}
 }
@@ -254,56 +212,34 @@ void Test::ManualCommutation() {
 			LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::High);
 			LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::Idle);
 			LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Low);
-//			Detector::SetPhase(Detector::Phase::B, false);
 			break;
 		case 1:
 			LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Idle);
 			LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::High);
 			LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Low);
-//			Detector::SetPhase(Detector::Phase::A, true);
 			break;
 		case 2:
 			LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Low);
 			LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::High);
 			LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Idle);
-//			Detector::SetPhase(Detector::Phase::C, false);
 			break;
 		case 3:
 			LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Low);
 			LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::Idle);
 			LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::High);
-//			Detector::SetPhase(Detector::Phase::B, true);
 			break;
 		case 4:
 			LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Idle);
 			LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::Low);
 			LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::High);
-//			Detector::SetPhase(Detector::Phase::A, false);
 			break;
 		case 5:
 			LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::High);
 			LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::Low);
 			LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Idle);
-//			Detector::SetPhase(Detector::Phase::C, true);
 			break;
 		}
 		vTaskDelay(2000);
-		uint16_t sample[3];
-//		sample[0] = Detector::GetLastSample(Detector::Phase::A);
-//		sample[1] = Detector::GetLastSample(Detector::Phase::B);
-//		sample[2] = Detector::GetLastSample(Detector::Phase::C);
-		LowLevel::SetPWM(0);
-		LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Idle);
-		LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::Idle);
-		LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Idle);
-		Log::Uart(Log::Lvl::Inf, "Phases: %d;%d;%d", sample[0], sample[1], sample[2]);
-//		LowLevel::SetPWM(0);
-//		LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Idle);
-//		LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::Idle);
-//		LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Idle);
-//
-//		uint8_t sector = InductanceSensing::RotorPosition();
-//		Log::Uart(Log::Lvl::Inf, "Step: %d, Sector: %d", step, sector);
 	}
 	LowLevel::SetPWM(0);
 	LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Idle);

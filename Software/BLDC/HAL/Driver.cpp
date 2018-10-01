@@ -18,29 +18,11 @@ extern ADC_HandleTypeDef hadc1;
 static constexpr int ADCBufferLength = 6;
 
 static uint16_t ADCBuf[ADCBufferLength];
-static uint16_t *ValidBuf = ADCBuf;
 
 static Driver::IncCallback IncCB;
 static void* IncPtr;
 
-static uint8_t CommutationStep;
-
-
-
-static Driver::State state;
-static uint32_t StartTime;
-static uint16_t StartSteps;
-
-static constexpr uint32_t StartSequenceLength = 140000; //sizeof(StartSequence)/sizeof(StartSequence[0]);
-static constexpr uint32_t StartFinalRPM = 800;
-static constexpr uint8_t MotorPoles = 12;
-static constexpr uint32_t StartMaxPeriod = 10000;
-static constexpr uint16_t StartFinalPWM = 101;
-static constexpr uint16_t StartMinPWM = 100;
-
 void HAL::BLDC::Driver::SetStep(uint8_t step) {
-//	HAL_GPIO_WritePin(TRIGGER_GPIO_Port, TRIGGER_Pin, GPIO_PIN_SET);
-//	HAL_GPIO_TogglePin(TRIGGER_GPIO_Port, TRIGGER_Pin);
 	switch (step) {
 	case 0:
 		LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::High);
@@ -48,7 +30,6 @@ void HAL::BLDC::Driver::SetStep(uint8_t step) {
 		LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Low);
 		nPhaseHigh = LowLevel::Phase::A;
 		nPhaseIdle = LowLevel::Phase::B;
-//		Detector::SetPhase(Detector::Phase::B, true);
 		break;
 	case 1:
 		LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Idle);
@@ -56,7 +37,6 @@ void HAL::BLDC::Driver::SetStep(uint8_t step) {
 		LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Low);
 		nPhaseHigh = LowLevel::Phase::B;
 		nPhaseIdle = LowLevel::Phase::A;
-//		Detector::SetPhase(Detector::Phase::A, false);
 		break;
 	case 2:
 		LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Low);
@@ -64,7 +44,6 @@ void HAL::BLDC::Driver::SetStep(uint8_t step) {
 		LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Idle);
 		nPhaseHigh = LowLevel::Phase::B;
 		nPhaseIdle = LowLevel::Phase::C;
-//		Detector::SetPhase(Detector::Phase::C, true);
 		break;
 	case 3:
 		LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Low);
@@ -72,7 +51,6 @@ void HAL::BLDC::Driver::SetStep(uint8_t step) {
 		LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::High);
 		nPhaseHigh = LowLevel::Phase::C;
 		nPhaseIdle = LowLevel::Phase::B;
-//		Detector::SetPhase(Detector::Phase::B, false);
 		break;
 	case 4:
 		LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Idle);
@@ -80,7 +58,6 @@ void HAL::BLDC::Driver::SetStep(uint8_t step) {
 		LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::High);
 		nPhaseHigh = LowLevel::Phase::C;
 		nPhaseIdle = LowLevel::Phase::A;
-//		Detector::SetPhase(Detector::Phase::A, true);
 		break;
 	case 5:
 		LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::High);
@@ -88,7 +65,6 @@ void HAL::BLDC::Driver::SetStep(uint8_t step) {
 		LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Idle);
 		nPhaseHigh = LowLevel::Phase::A;
 		nPhaseIdle = LowLevel::Phase::C;
-//		Detector::SetPhase(Detector::Phase::C, false);
 		break;
 	}
 }
@@ -268,41 +244,6 @@ void HAL::BLDC::Driver::NewPhaseVoltages(uint16_t *data) {
 		}
 	}
 		break;
-	case State::Calibrating:
-	{
-		// manually rotate through all commutation steps and record zero correction factors
-		constexpr uint16_t cycleLength = 30000;
-		constexpr uint16_t sampleLength = 5000;
-		uint8_t step = cnt / cycleLength;
-		uint16_t phase = cnt % cycleLength;
-		static uint32_t sumHigh;
-		static uint32_t sumMiddle;
-		if (phase == 1) {
-			if (step > 0) {
-				// not the first calibration step, calculate last sampled zero factor
-				ZeroCal[step - 1] = (uint64_t) sumMiddle * 65536UL / sumHigh;
-			}
-			if (step < 6) {
-				Log::Uart(Log::Lvl::Dbg, "Calibration step %d/6", step+1);
-				sumHigh = 0;
-				sumMiddle = 0;
-				LowLevel::SetPWM(minPWM);
-				SetStep(step);
-			} else {
-				// calibration completed
-				Log::Uart(Log::Lvl::Inf, "Calibration completed");
-				Log::Uart(Log::Lvl::Dbg, "Result: %d %d %d %d %d %d",
-						ZeroCal[0], ZeroCal[1], ZeroCal[2], ZeroCal[3],
-						ZeroCal[4], ZeroCal[5]);
-				SetIdle();
-				NextState(State::Idle);
-			}
-		} else if(phase > cycleLength - sampleLength) {
-			sumHigh += data[(int) nPhaseHigh];
-			sumMiddle += data[(int) nPhaseIdle];
-		}
-	}
-		break;
 	case State::Testing: {
 		constexpr uint16_t minHighVoltage = 2000;
 		/* Set output driver according to test step and check measured phases from previous step */
@@ -360,15 +301,9 @@ HAL::BLDC::Driver::Driver() {
 	}
 	SetIdle();
 
-//	Detector::Disable();
-
-	CommutationStep = 0;
-
 	state = State::Idle;
 	stateBuf = State::None;
 	cnt = 0;
-	ZeroCal.fill(32768);
-	ZeroCal = {36757, 36286, 34064, 29987 ,29523, 32087};
 	dir = Direction::Forward;
 	RotorPos = -1;
 #ifdef DRIVER_BUFFER
@@ -378,8 +313,6 @@ HAL::BLDC::Driver::Driver() {
 	HAL_ADC_Start_DMA(&hadc1, (uint32_t*) ADCBuf, ADCBufferLength);
 
 	Inst = this;
-
-//	Detector::EnableIdleTracking(IdleTrackingCB);
 }
 
 void HAL::BLDC::Driver::SetPWM(int16_t promille) {
@@ -448,21 +381,10 @@ void HAL::BLDC::Driver::InitiateStart() {
 	stateBuf = State::Powered_PreZero;
 }
 
-void HAL::BLDC::Driver::ZeroCalibration() {
-	Log::Uart(Log::Lvl::Inf, "Starting Zero Detection calibration");
-	stateBuf = State::Calibrating;
-}
-
-bool HAL::BLDC::Driver::IsCalibrating() {
-	return (*(volatile State*) &state == State::Calibrating)
-			|| (*(volatile State*) &stateBuf == State::Calibrating);
-}
-
 void HAL::BLDC::Driver::SetIdle() {
 	LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Idle);
 	LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::Idle);
 	LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Idle);
-//	LowLevel::SetPWM(0);
 }
 
 HAL::BLDC::Driver::~Driver() {

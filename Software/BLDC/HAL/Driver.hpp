@@ -12,16 +12,14 @@ public:
 	~Driver();
 
 	enum class State : uint8_t {
-		None,
-		Stopped,
-		Align,
-		Starting,
-		Powered_PreZero,
-		Powered_PastZero,
-		Idle,
-		Idle_Braking,
-		Calibrating,
-		Testing,
+		None,					// only used to indicate no state change in stateBuf
+		Stopped,				// all phases are actively pulled low, blocking the motor
+		Align,					// low power align prior to starting (in case inductance sensing failed)
+		Powered_PreZero,		// motor is running under power, waiting for zero crossing
+		Powered_PastZero,		// motor is running under power, crossing already happened
+		Idle,					// unpowered, either stopped or running from external force/momentum
+		Idle_Braking,			// regenerative braking active but DC bus can't take the charge -> idling
+		Testing,				// Controller performs selftest, motor is not moving
 	};
 
 	enum class TestResult : uint8_t {
@@ -48,8 +46,6 @@ public:
 	void RegisterIncCallback(IncCallback c, void *ptr) override;
 	void RegisterADCCallback(ADCCallback c, void *ptr) override;
 
-	void ZeroCalibration();
-	bool IsCalibrating();
 	bool IsRunning();
 	bool GotValidPosition();
 	TestResult Test();
@@ -70,8 +66,6 @@ private:
 	void SetStep(uint8_t step);
 	void SetIdle();
 	void IncRotorPos();
-
-	std::array<uint16_t, 6> ZeroCal;
 
 	State state, stateBuf;
 	uint32_t cnt;
