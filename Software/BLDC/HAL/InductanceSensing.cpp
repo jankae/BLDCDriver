@@ -3,7 +3,6 @@
 #include "lowlevel.hpp"
 #include "stm32f3xx_hal.h"
 #include "PowerADC.hpp"
-#include "Detector.hpp"
 #include "Logging.hpp"
 
 using namespace HAL::BLDC;
@@ -18,8 +17,6 @@ static constexpr uint16_t CurrentADCSamplingCycles = 8;
 
 static uint8_t stepCnt;
 static volatile bool done;
-
-uint16_t I[6];
 
 static void SetPhases(uint8_t step) {
 	switch(step) {
@@ -113,7 +110,8 @@ static void ConfigureHardware(uint32_t *SettingBuffer, uint16_t *CurrentBuf) {
 	TIM2->EGR = TIM_EGR_UG;
 	TIM15->EGR = TIM_EGR_UG;
 
-	HAL_ADC_Start_DMA(&hadc2, (uint32_t*) CurrentBuf, 6);
+	HAL_ADC_Stop_DMA(&hadc2);
+	HAL_ADC_Start_DMA(&hadc2, (uint32_t*) CurrentBuf, 12);
 
 	// start sampling slightly before the next step starts
 	TIM15->CNT = PWMPeriod + CurrentADCSamplingCycles * BaseClkMHz / CurrentADCClockMHz;
@@ -168,7 +166,7 @@ static void ReconfigureHardware(uint32_t *SettingBuffer) {
 uint16_t HAL::BLDC::InductanceSensing::RotorPosition() {
 	done = false;
 	uint32_t buf[2];
-//	uint16_t I[6];
+	uint16_t I[12];
 	ConfigureHardware(buf, I);
 	while (!done) {
 
@@ -176,9 +174,9 @@ uint16_t HAL::BLDC::InductanceSensing::RotorPosition() {
 	ReconfigureHardware(buf);
 
 	// compares inverted with respect to paper as ADC measures lower values for higher currents
-	bool I_II = I[0] < I[1];
-	bool III_IV = I[3] < I[2];
-	bool V_VI = I[4] < I[5];
+	bool I_II = I[0] < I[2];
+	bool III_IV = I[6] < I[4];
+	bool V_VI = I[8] < I[10];
 
 	uint8_t section = 0;
 

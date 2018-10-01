@@ -5,7 +5,6 @@
 #include "stm32f3xx_hal.h"
 #include "FreeRTOS.h"
 #include "task.h"
-#include "Detector.hpp"
 #include "PowerADC.hpp"
 
 #include "Tests.hpp"
@@ -21,9 +20,10 @@ void Start() {
 	Log::Uart(Log::Lvl::Inf, "Start");
 
 	vTaskDelay(500);
+//	Test::PowerADC();
 //	Test::ManualCommutation();
 //	Test::InductanceSense();
-	Test::MotorStart();
+	Test::MotorFunctions();
 //	Test::MotorManualStart();
 //	Test::TimerTest();
 //	Test::SetMidPWM();

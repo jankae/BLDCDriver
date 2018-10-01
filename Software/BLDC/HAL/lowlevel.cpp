@@ -3,6 +3,8 @@
 #include "stm32f3xx_hal.h"
 #include "stm32f303x8.h"
 
+#include "Logging.hpp"
+
 static constexpr uint8_t PosFromMask(uint32_t mask) {
 	uint8_t pos = 0;
 	while (!(mask & 0x01)) {
@@ -17,11 +19,41 @@ static constexpr uint16_t Pins[] = { PosFromMask(PHASE_A_Pin), PosFromMask(
 		PHASE_B_Pin), PosFromMask(PHASE_C_Pin) };
 static constexpr GPIO_TypeDef *Ports[] = {PHASE_A_GPIO_Port, PHASE_B_GPIO_Port, PHASE_C_GPIO_Port};
 
+extern ADC_HandleTypeDef hadc1;
 extern TIM_HandleTypeDef htim1;
 extern TIM_HandleTypeDef htim2;
 
 constexpr uint16_t MaxPWM = 1600;
 static uint16_t pwmVal;
+
+static void AdjustSamplingToPWM(uint16_t pwm) {
+	constexpr uint32_t ADCClockMHz = 64;
+	constexpr uint32_t TimerClockMHz = 32;
+	constexpr uint16_t ADCSamplingCycles = 5;
+	constexpr uint16_t ADCOverallCycles = 3 * (ADCSamplingCycles + 12);
+	constexpr uint16_t OverallTimerCycles = ADCOverallCycles * TimerClockMHz / ADCClockMHz;
+
+	constexpr uint16_t PWMOffSamplingPoint = 1000;
+	constexpr uint16_t lowPWMThreshold = 160;
+	constexpr uint16_t highPWMThreshold = PWMOffSamplingPoint - 300;
+	constexpr uint16_t PWMOnSamplingPoint = lowPWMThreshold - OverallTimerCycles;
+
+	static_assert(PWMOnSamplingPoint >= 10 && PWMOnSamplingPoint <= 800, "Unplausible early sampling point");
+
+	static bool PWMOnSampling = false;
+	if (PWMOnSampling && pwm <= lowPWMThreshold) {
+		PWMOnSampling = false;
+		Log::Uart(Log::Lvl::Inf, "Switching to off phase sampling");
+	} else if (!PWMOnSampling && pwm > highPWMThreshold) {
+		PWMOnSampling = true;
+		Log::Uart(Log::Lvl::Inf, "Switching to on phase sampling");
+	}
+	if (PWMOnSampling) {
+		TIM1->CCR4 = PWMOnSamplingPoint;
+	} else {
+		TIM1->CCR4 = PWMOffSamplingPoint;
+	}
+}
 
 void HAL::BLDC::LowLevel::Init() {
 	__HAL_DBGMCU_FREEZE_TIM2();
@@ -38,6 +70,12 @@ void HAL::BLDC::LowLevel::Init() {
 
 	HAL_TIM_Base_Start(&htim1);
 	HAL_TIM_Base_Start(&htim2);
+
+	// start sampling
+	HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED);
+
+	AdjustSamplingToPWM(0);
+	HAL_TIM_OC_Start(&htim1, TIM_CHANNEL_4);
 }
 
 void HAL::BLDC::LowLevel::SetPWM(int16_t promille) {
@@ -58,6 +96,7 @@ void HAL::BLDC::LowLevel::SetPhase(Phase p, State s) {
 		TIM1->CCR1 = pwmVal;
 		TIM1->CCR2 = pwmVal;
 		TIM1->CCR3 = pwmVal;
+		AdjustSamplingToPWM(pwmVal);
 		gpio->MODER &= ~(0x01 << (pin * 2));
 		gpio->MODER |= (0x02 << (pin * 2));
 		break;
@@ -82,7 +121,6 @@ void HAL::BLDC::LowLevel::SetPhase(Phase p, State s) {
 	}
 }
 
-#include "Detector.hpp"
 #include "PowerADC.hpp"
 #include "Driver.hpp"
 

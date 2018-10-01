@@ -5,10 +5,9 @@
 #include "stm32f3xx_hal.h"
 #include "lowlevel.hpp"
 #include "Logging.hpp"
-#include "Timer.hpp"
 #include "Driver.hpp"
-#include "Detector.hpp"
 #include "InductanceSensing.hpp"
+#include "PowerADC.hpp"
 
 using namespace HAL::BLDC;
 
@@ -28,39 +27,136 @@ void Test::DifferentPWMs(void) {
 	LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Idle);
 }
 
-void Test::MotorStart(void) {
-	Log::Uart(Log::Lvl::Inf, "Test, attempting to start motor");
+void Test::MotorFunctions(void) {
+	auto Start = [](Driver &d) -> bool {
+		constexpr uint8_t attempts = 10;
+		uint8_t attempt_cnt = 0;
+		while(!d.IsRunning()) {
+			attempt_cnt++;
+			if(attempt_cnt > attempts) {
+				Log::Uart(Log::Lvl::Err, "Unable to start motor");
+				return false;
+			}
+			Log::Uart(Log::Lvl::Dbg, "Starting motor: attempt %d", attempt_cnt);
+			d.InitiateStart();
+			vTaskDelay(100);
+		}
+		return true;
+	};
+
 	Driver d;
-//	d.ZeroCalibration();
-//	vTaskDelay(12000);
-
-
-	while (1) {
-		d.SetDirection(Driver::Direction::Forward);
-		d.InitiateStart();
-		vTaskDelay(2000);
-		d.FreeRunning();
-		vTaskDelay(3000);
-		d.SetDirection(Driver::Direction::Reverse);
-		d.InitiateStart();
-		vTaskDelay(2000);
-		d.FreeRunning();
-		vTaskDelay(3000);
+	switch(d.Test()) {
+	case Driver::TestResult::Failure:
+		Log::Uart(Log::Lvl::Crt, "Driver reports hardware failure");
+		return;
+	case Driver::TestResult::NoMotor:
+		Log::Uart(Log::Lvl::Err, "Driver reports no motor");
+		return;
 	}
-}
+	Log::Uart(Log::Lvl::Inf, "Driver test passed");
 
-void Test::TimerTest(void) {
-	Log::Uart(Log::Lvl::Inf, "Test, registering callback in 1s (now: %lu)", HAL_GetTick());
-	HAL_GPIO_WritePin(TRIGGER_GPIO_Port, TRIGGER_Pin, GPIO_PIN_SET);
-	Timer::Schedule(1000000, [](){
+//	{
+//		/* Repower during idle Test */
+//		for(uint16_t i = 100;i>=10;i-= 10) {
+//			if(!Start(d)) {
+//				return;
+//			}
+//			vTaskDelay(200);
+//			d.SetPWM(200);
+//			vTaskDelay(300);
+//			d.FreeRunning();
+//			vTaskDelay(i);
+//			d.InitiateStart();
+//			vTaskDelay(1000);
+//			if(d.IsRunning()) {
+//				Log::Uart(Log::Lvl::Inf, "Repowering after %dms worked", i);
+//			} else {
+//				Log::Uart(Log::Lvl::Inf, "Repowering after %dms failed", i);
+//			}
+//			d.FreeRunning();
+//			vTaskDelay(1000);
+//			d.Stop();
+//			vTaskDelay(1000);
+//		}
+//	}
+//	return;
+
+	{
+		/* Speed change Test */
+		constexpr uint16_t maxTestPWM = 500;
+		constexpr uint16_t minTestPWM = 50;
+		constexpr uint16_t minPWMStep = 30;
+		constexpr uint16_t maxPWMStep = 450;
+		constexpr uint16_t stepIncr = 30;
+
 		HAL_GPIO_WritePin(TRIGGER_GPIO_Port, TRIGGER_Pin, GPIO_PIN_RESET);
-		Log::Uart(Log::Lvl::Inf, "Callback executed at %lu", HAL_GetTick());
-		Log::Uart(Log::Lvl::Inf, "Test, registering callback in 20ms (now: %lu)", HAL_GetTick());
-		Timer::Schedule(20000, [](){
-			HAL_GPIO_WritePin(TRIGGER_GPIO_Port, TRIGGER_Pin, GPIO_PIN_SET);
-			Log::Uart(Log::Lvl::Inf, "Callback executed at %lu", HAL_GetTick());
-		});
-	});
+		if(!Start(d)) {
+			return;
+		}
+
+		vTaskDelay(1000);
+		d.SetPWM(250);
+		vTaskDelay(500);
+		HAL_GPIO_WritePin(TRIGGER_GPIO_Port, TRIGGER_Pin, GPIO_PIN_SET);
+		d.SetPWM(100);
+		vTaskDelay(5000);
+//		d.FreeRunning();
+
+//		for (uint16_t i = minPWMStep; i <= maxPWMStep; i += stepIncr) {
+//			Log::Uart(Log::Lvl::Dbg, "Speed change, step: %d", i);
+//			int16_t j;
+//			for (j = minTestPWM; j <= maxTestPWM; j += i) {
+//				Log::Uart(Log::Lvl::Dbg, "PWM: %d", j);
+//				d.SetPWM(j);
+//				vTaskDelay(300);
+//				if (!d.IsRunning()) {
+//					d.FreeRunning();
+//					Log::Uart(Log::Lvl::Wrn,
+//							"Failed speed change test: PWM: %d, step: %d",
+//							j, i);
+//					return;
+//				}
+//			}
+//			j -= i;
+//			for (;j >= minTestPWM; j -= i) {
+//				Log::Uart(Log::Lvl::Dbg, "PWM: %d", j);
+//				d.SetPWM(j);
+//				vTaskDelay(300);
+//				if (!d.IsRunning()) {
+//					d.FreeRunning();
+//					Log::Uart(Log::Lvl::Wrn,
+//							"Failed speed change test: PWM: %d, step: -%d",
+//							j, i);
+//					return;
+//				}
+//			}
+//		}
+//		d.FreeRunning();
+//
+//		Log::Uart(Log::Lvl::Inf, "Speed change test passed");
+
+	}
+
+//	while (1) {
+//		d.SetDirection(Driver::Direction::Forward);
+//		d.InitiateStart();
+//		vTaskDelay(2000);
+//		for (uint16_t i = 100; i < 500; i++) {
+//			d.SetPWM(i);
+//			vTaskDelay(10);
+//		}
+//		for (uint16_t i = 500; i > 50; i--) {
+//			d.SetPWM(i);
+//			vTaskDelay(10);
+//		}
+////		d.FreeRunning();
+//		vTaskDelay(1000);
+//		d.SetDirection(Driver::Direction::Reverse);
+////		d.InitiateStart();
+//		vTaskDelay(2000);
+//		d.Stop();
+//		vTaskDelay(3000);
+//	}
 }
 
 static void SetStep(uint8_t step) {
@@ -126,17 +222,24 @@ void Test::MotorManualStart(void) {
 	Driver d;
 	while (1) {
 		Log::Uart(Log::Lvl::Inf, "Waiting for external start");
-		while(d.GetState() == Driver::State::Stopped) {
+		while(!d.GotValidPosition()) {
 			vTaskDelay(10);
 		}
-//		d.InitiateStart();
+		d.InitiateStart();
 		vTaskDelay(2000);
 		d.FreeRunning();
-		while(d.GetState() != Driver::State::Stopped) {
+		while(d.GotValidPosition()) {
 			vTaskDelay(10);
 		}
 		vTaskDelay(500);
 	}
+}
+
+void Test::PowerADC() {
+	vTaskDelay(1000);
+	HAL::BLDC::PowerADC::Pause();
+	PowerADC::PrintBuffer();
+	PowerADC::Resume();
 }
 
 void Test::ManualCommutation() {

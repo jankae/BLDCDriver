@@ -1,21 +1,19 @@
 #include "Driver.hpp"
 
 #include "lowlevel.hpp"
-#include "Detector.hpp"
-#include "Timer.hpp"
 #include "Logging.hpp"
 
 #include "stm32f3xx_hal.h"
 #include "stm32f303x8.h"
 #include "InductanceSensing.hpp"
 #include "fifo.hpp"
+#include "PowerADC.hpp"
 
 using namespace HAL::BLDC;
 
 Driver* HAL::BLDC::Driver::Inst;
 
 extern ADC_HandleTypeDef hadc1;
-extern TIM_HandleTypeDef htim1;
 
 static constexpr int ADCBufferLength = 6;
 
@@ -111,9 +109,26 @@ void HAL::BLDC::Driver::NewPhaseVoltages(uint16_t *data) {
 		}
 	}
 
+	if (state == State::Powered_PastZero || state == State::Powered_PreZero) {
+		if (!PowerADC::VoltageWithinLimits()) {
+			// DC bus voltage too high, presumably due to regenerative braking */
+			SetIdle();
+			NextState(State::Idle_Braking);
+			Log::Uart(Log::Lvl::Wrn, "Switch to idling due to high DC bus voltage");
+		}
+	}
+
 	cnt++;
 
 	switch(state) {
+	case State::Idle_Braking:
+		if(PowerADC::VoltageWithinLimits()) {
+			// the DC bus voltage dropped sufficiently to resume powered operation
+			Log::Uart(Log::Lvl::Inf, "Resume powered operation");
+			NextState(State::Powered_PreZero);
+			break;
+		}
+		/* no break */
 	case State::Idle:
 	{
 		// do not apply any voltages to the phase terminals
@@ -129,7 +144,7 @@ void HAL::BLDC::Driver::NewPhaseVoltages(uint16_t *data) {
 			}
 		}
 #endif
-		if (cnt > 50) {
+		if (cnt > 10) {
 			static constexpr uint16_t idleDetectionThreshold = 25;
 			static constexpr uint16_t idleDetectionHysterese = 15;
 			// attempt to track the rotor position from the induced voltages
@@ -179,6 +194,7 @@ void HAL::BLDC::Driver::NewPhaseVoltages(uint16_t *data) {
 		LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::ConstLow);
 		LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::ConstLow);
 		LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::ConstLow);
+		RotorPos = -1;
 		break;
 	case State::Align:
 	{
@@ -200,25 +216,36 @@ void HAL::BLDC::Driver::NewPhaseVoltages(uint16_t *data) {
 		break;
 	case State::Powered_PreZero:
 	{
-		constexpr uint16_t nPulsesSkip = 4;
+		constexpr uint16_t nPulsesSkip = 2;
 		constexpr uint16_t ZeroThreshold = 10;
 		constexpr uint32_t timeoutThresh = CommutationTimeoutms * HzPWM / 1000;
+
+		const uint16_t zero = data[(int) nPhaseHigh] / 2;
+		static bool above = false;
 
 		if (cnt == 1) {
 			SetStep(RotorPos);
 		} else if (cnt > nPulsesSkip) {
+			if (zero > 100 && !above) {
+				above = true;
+				Log::Uart(Log::Lvl::Inf, "Switched to on phase sampling");
+			} else if(zero < 100 && above) {
+				above = false;
+				Log::Uart(Log::Lvl::Inf, "Switched to off phase sampling");
+			}
+
 			bool rising = (dir == Direction::Forward) ^ (RotorPos & 0x01);
-			uint16_t compare = data[(int) nPhaseIdle];
+			int16_t compare = data[(int) nPhaseIdle] - zero;
 
 			if (DetectorArmed) {
-				if ((compare == 0 && !rising)
+				if ((compare <= 0 && !rising)
 						|| (compare >= ZeroThreshold && rising)) {
 					// crossing detected
 					timeToZero = cnt;
 					NextState(State::Powered_PastZero);
 				}
 			} else {
-				if ((compare == 0 && rising)
+				if ((compare <= 0 && rising)
 						|| (compare > 0 && !rising)) {
 					DetectorArmed = true;
 				}
@@ -276,6 +303,51 @@ void HAL::BLDC::Driver::NewPhaseVoltages(uint16_t *data) {
 		}
 	}
 		break;
+	case State::Testing: {
+		constexpr uint16_t minHighVoltage = 2000;
+		/* Set output driver according to test step and check measured phases from previous step */
+		switch(cnt) {
+		case 1:
+			testResult = TestResult::OK;
+			LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::ConstHigh);
+			LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::Idle);
+			LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Idle);
+			break;
+		case 2:
+			LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Idle);
+			LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::ConstHigh);
+			LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Idle);
+			if(data[(int) LowLevel::Phase::A] < minHighVoltage) {
+				testResult = TestResult::Failure;
+			}
+			break;
+		case 3:
+			LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Idle);
+			LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::Idle);
+			LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::ConstHigh);
+			if(data[(int) LowLevel::Phase::B] < minHighVoltage) {
+				testResult = TestResult::Failure;
+			}
+			break;
+		case 4:
+			LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Idle);
+			LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::Idle);
+			LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Idle);
+			if(data[(int) LowLevel::Phase::C] < minHighVoltage) {
+				testResult = TestResult::Failure;
+			}
+			if (testResult == TestResult::OK) {
+				/* output driver seems to work, check for motor */
+				if (data[(int) LowLevel::Phase::A] < minHighVoltage
+						|| data[(int) LowLevel::Phase::B] < minHighVoltage) {
+					testResult = TestResult::NoMotor;
+				}
+			}
+			NextState(State::Idle);
+			break;
+		}
+	}
+		break;
 	default:
 		break;
 	}
@@ -286,10 +358,7 @@ HAL::BLDC::Driver::Driver() {
 		Log::Uart(Log::Lvl::Crt, "Attempted to create second driver object");
 		return;
 	}
-	LowLevel::SetPWM(0);
-	LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Idle);
-	LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::Idle);
-	LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Idle);
+	SetIdle();
 
 //	Detector::Disable();
 
@@ -300,26 +369,13 @@ HAL::BLDC::Driver::Driver() {
 	cnt = 0;
 	ZeroCal.fill(32768);
 	ZeroCal = {36757, 36286, 34064, 29987 ,29523, 32087};
-	dir = Direction::Reverse;
+	dir = Direction::Forward;
 	RotorPos = -1;
 #ifdef DRIVER_BUFFER
 	buffer.clear();
 #endif
 
-	// start sampling
-	HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED);
 	HAL_ADC_Start_DMA(&hadc1, (uint32_t*) ADCBuf, ADCBufferLength);
-
-	constexpr uint32_t ADCClockMHz = 64;
-	constexpr uint32_t TimerClockMHz = 32;
-	constexpr uint16_t ADCSamplingCycles = 5;
-	constexpr uint16_t ADCOverallCycles = ADCBufferLength/2 * (ADCSamplingCycles + 12);
-	constexpr uint16_t OverallTimerCycles = ADCOverallCycles * TimerClockMHz / ADCClockMHz;
-	constexpr uint16_t minPWMValTimCnt = 1600 * minPWM / 1000;
-
-//	TIM1->CCR4 = minPWMValTimCnt - OverallTimerCycles;
-	TIM1->CCR4 = 1600 - OverallTimerCycles;
-	HAL_TIM_OC_Start(&htim1, TIM_CHANNEL_4);
 
 	Inst = this;
 
@@ -344,27 +400,12 @@ void HAL::BLDC::Driver::RegisterADCCallback(ADCCallback c, void* ptr) {
 	UNUSED(ptr);
 }
 
-static void Idle() {
-	Log::Uart(Log::Lvl::Inf, "Idle");
-	LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Idle);
-	LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::Idle);
-	LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Idle);
-	LowLevel::SetPWM(0);
-}
-
 void HAL::BLDC::Driver::FreeRunning() {
 	stateBuf = State::Idle;
 }
 
 void HAL::BLDC::Driver::Stop() {
-	Log::Uart(Log::Lvl::Inf, "Stopping motor");
-	Timer::Abort();
-//	Detector::Disable();
-	LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Low);
-	LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::Low);
-	LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Low);
-	state = State::Stopped;
-	Timer::Schedule(500000, Idle);
+	stateBuf = State::Stopped;
 }
 
 void HAL::BLDC::Driver::DMAComplete() {
@@ -386,7 +427,6 @@ void HAL::BLDC::Driver::InitiateStart() {
 		// rotor position not known at the moment, detect using inductance sensing
 		HAL_ADC_Stop_DMA(&hadc1);
 		uint8_t pos = InductanceSensing::RotorPosition();
-//		pos = 0;
 		HAL_ADC_Start_DMA(&hadc1, (uint32_t*) ADCBuf, ADCBufferLength);
 		Log::Uart(Log::Lvl::Inf, "Position: %d", pos);
 		if (pos > 0) {
@@ -414,14 +454,15 @@ void HAL::BLDC::Driver::ZeroCalibration() {
 }
 
 bool HAL::BLDC::Driver::IsCalibrating() {
-	return (state == State::Calibrating) || (stateBuf == State::Calibrating);
+	return (*(volatile State*) &state == State::Calibrating)
+			|| (*(volatile State*) &stateBuf == State::Calibrating);
 }
 
 void HAL::BLDC::Driver::SetIdle() {
 	LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Idle);
 	LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::Idle);
 	LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Idle);
-	LowLevel::SetPWM(0);
+//	LowLevel::SetPWM(0);
 }
 
 HAL::BLDC::Driver::~Driver() {
@@ -430,10 +471,27 @@ HAL::BLDC::Driver::~Driver() {
 	Inst = nullptr;
 }
 
+Driver::TestResult HAL::BLDC::Driver::Test() {
+	stateBuf = State::Testing;
+	while (*(volatile State*) &stateBuf == State::Testing
+			|| *(volatile State*) &state == State::Testing)
+		;
+	return testResult;
+}
+
+bool HAL::BLDC::Driver::GotValidPosition() {
+	return (RotorPos != -1);
+}
+
 void HAL::BLDC::Driver::IncRotorPos() {
 	if (dir == Direction::Forward) {
 		RotorPos = (RotorPos + 1) % 6;
 	} else {
 		RotorPos = (RotorPos + 5) % 6;
 	}
+}
+
+bool HAL::BLDC::Driver::IsRunning() {
+	return (*(volatile State*) &state == State::Powered_PastZero
+			|| *(volatile State*) &state == State::Powered_PreZero);
 }

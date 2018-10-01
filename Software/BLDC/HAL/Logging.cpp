@@ -90,6 +90,15 @@ void Log::Out(enum Class cls, enum Lvl lvl, const char* fmt, ...) {
 
 void Log::Uart(enum Lvl lvl, const char* fmt, ...) {
 	if((int) levels[(int) Class::BLDC] <= (int) lvl) {
+		char time[6];
+		uint32_t tick = HAL_GetTick();
+		time[0] = (tick/10000)%10 + '0';
+		time[1] = (tick/1000)%10 + '0';
+		time[2] = (tick/100)%10 + '0';
+		time[3] = (tick/10)%10 + '0';
+		time[4] = (tick/1)%10 + '0';
+		time[5] = ':';
+		write(time, time + 6);
 		switch(lvl) {
 		case Lvl::Dbg:
 			writeString("[DBG]:");

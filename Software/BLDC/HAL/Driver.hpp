@@ -19,7 +19,15 @@ public:
 		Powered_PreZero,
 		Powered_PastZero,
 		Idle,
+		Idle_Braking,
 		Calibrating,
+		Testing,
+	};
+
+	enum class TestResult : uint8_t {
+		OK,
+		NoMotor,
+		Failure,
 	};
 
 	enum class Direction : uint8_t {
@@ -42,6 +50,9 @@ public:
 
 	void ZeroCalibration();
 	bool IsCalibrating();
+	bool IsRunning();
+	bool GotValidPosition();
+	TestResult Test();
 
 	static void DMAComplete();
 	static void DMAHalfComplete();
@@ -54,7 +65,7 @@ private:
 	static Driver *Inst;
 	static constexpr uint32_t minPWM = 100;
 	static constexpr uint32_t HzPWM = 20000;
-	static constexpr uint32_t CommutationTimeoutms = 100;
+	static constexpr uint32_t CommutationTimeoutms = 50;
 	void NewPhaseVoltages(uint16_t *data);
 	void SetStep(uint8_t step);
 	void SetIdle();
@@ -72,6 +83,7 @@ private:
 	int8_t RotorPos;
 	Direction dir;
 
+	TestResult testResult;
 };
 }
 }
