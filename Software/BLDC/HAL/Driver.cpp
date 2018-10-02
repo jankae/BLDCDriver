@@ -315,6 +315,8 @@ HAL::BLDC::Driver::Driver() {
 	HAL_ADC_Start_DMA(&hadc1, (uint32_t*) ADCBuf, ADCBufferLength);
 
 	Inst = this;
+
+	Log::Uart(Log::Lvl::Inf, "Created driver object");
 }
 
 void HAL::BLDC::Driver::SetPWM(int16_t promille) {

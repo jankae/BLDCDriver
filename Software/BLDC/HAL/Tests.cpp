@@ -56,7 +56,7 @@ void Test::MotorFunctions(void) {
 		constexpr uint16_t maxPWMStep = 450;
 		constexpr uint16_t stepIncr = 30;
 
-		HAL_GPIO_WritePin(TRIGGER_GPIO_Port, TRIGGER_Pin, GPIO_PIN_RESET);
+//		HAL_GPIO_WritePin(TRIGGER_GPIO_Port, TRIGGER_Pin, GPIO_PIN_RESET);
 		if(!Start(d)) {
 			return;
 		}
@@ -64,7 +64,7 @@ void Test::MotorFunctions(void) {
 		vTaskDelay(1000);
 		d.SetPWM(300);
 		vTaskDelay(500);
-		HAL_GPIO_WritePin(TRIGGER_GPIO_Port, TRIGGER_Pin, GPIO_PIN_SET);
+//		HAL_GPIO_WritePin(TRIGGER_GPIO_Port, TRIGGER_Pin, GPIO_PIN_SET);
 		d.SetPWM(100);
 		vTaskDelay(5000);
 //		d.FreeRunning();

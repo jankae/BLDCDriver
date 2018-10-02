@@ -76,6 +76,8 @@ void HAL::BLDC::LowLevel::Init() {
 
 	AdjustSamplingToPWM(0);
 	HAL_TIM_OC_Start(&htim1, TIM_CHANNEL_4);
+
+	Log::Uart(Log::Lvl::Inf, "Initialized PWM and phase sampling");
 }
 
 void HAL::BLDC::LowLevel::SetPWM(int16_t promille) {

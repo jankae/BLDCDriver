@@ -2,5 +2,5 @@
 
 namespace Persistance {
 void Load();
-void Store();
+bool Store();
 }

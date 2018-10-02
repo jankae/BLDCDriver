@@ -84,6 +84,14 @@
 
 /* USER CODE BEGIN Includes */   	      
 /* Section where include file can be added */
+#define FreeRTOSPrioIdle						0
+#define FreeRTOSPrioLow							1
+#define FreeRTOSPrioBelowNormal					2
+#define FreeRTOSPrioNormal						3
+#define FreeRTOSPrioAboveNormal					4
+#define FreeRTOSPrioHigh						5
+#define FreeRTOSPrioRealtime					6
+
 /* USER CODE END Includes */ 
 
 /* Ensure stdint is only used by the compiler, and not the assembler. */

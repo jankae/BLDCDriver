@@ -63,8 +63,6 @@
 #define PHASE_B_GPIO_Port GPIOA
 #define PHASE_A_Pin GPIO_PIN_10
 #define PHASE_A_GPIO_Port GPIOA
-#define TRIGGER_Pin GPIO_PIN_8
-#define TRIGGER_GPIO_Port GPIOB
 
 /* ########################## Assert Selection ############################## */
 /**

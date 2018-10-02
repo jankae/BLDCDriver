@@ -2,6 +2,8 @@
 
 #include <array>
 #include <stdarg.h>
+#include "Sysinfo.hpp"
+#include "Communication.hpp"
 
 std::array<enum Log::Lvl, (int) Log::Class::MAX> levels;
 
@@ -31,8 +33,10 @@ do { const char string[] = s; write(string, string + sizeof(string) - 1); } whil
 
 static void init() {
 	/* USART1 interrupt Init */
-	HAL_NVIC_SetPriority(NVIC_ISR, 4, 0);
+	HAL_NVIC_SetPriority(NVIC_ISR, 5, 0);
 	HAL_NVIC_EnableIRQ(NVIC_ISR);
+	// enable receive interrupt
+	USART_BASE->CR1 |= USART_CR1_RXNEIE;
 
 	fifo.clear();
 }
@@ -63,6 +67,13 @@ void HANDLER(void)
 		if (fifo.getLevel() == 0) {
 			/* complete buffer sent, disable interrupt */
 			USART_BASE->CR1 &= ~USART_CR1_TXEIE;
+		}
+	}
+	while (USART_BASE->ISR & USART_ISR_RXNE) {
+		uint8_t data = USART_BASE->RDR;
+		extern Core::Sysinfo sys;
+		if (sys.communication) {
+			sys.communication->NewData(data);
 		}
 	}
 }

@@ -157,6 +157,7 @@ void HAL::BLDC::PowerADC::Init() {
 	HAL_ADCEx_Calibration_Start(&hadc2, ADC_SINGLE_ENDED);
 	HAL_ADC_Start_DMA(&hadc2, (uint32_t*) buf, BufferSize);
 	HAL_TIM_Base_Start(&htim15);
+	Log::Uart(Log::Lvl::Inf, "Initialized power ADC");
 }
 
 void HAL::BLDC::PowerADC::DMAComplete() {

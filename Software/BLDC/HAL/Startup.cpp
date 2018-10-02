@@ -7,28 +7,44 @@
 #include "task.h"
 #include "PowerADC.hpp"
 #include "Persistance.hpp"
+#include "Sysinfo.hpp"
+#include "Communication.hpp"
+#include "Driver.hpp"
+#include "Propeller.hpp"
 
 #include "Tests.hpp"
+
+Core::Sysinfo sys;
+Core::Propeller::Data propdata __attribute__ ((section (".ccmpersist")));
 
 void Start() {
 	Persistance::Load();
 
-	Log::Init(Log::Lvl::Inf);
+	// Initialize hardware
+	Log::Init(Log::Lvl::Dbg);
+
+	vTaskDelay(10);
+	Log::Uart(Log::Lvl::Inf, "Start");
 
 	HAL::BLDC::PowerADC::Init();
 	HAL::BLDC::LowLevel::Init();
+	auto driver = new HAL::BLDC::Driver();
 
-	vTaskDelay(100);
-	Log::Uart(Log::Lvl::Inf, "Start");
+	// create driver and core objects
+	sys.communication = new Core::Communication();
+	sys.prop = new Core::Propeller(&propdata);
 
-	vTaskDelay(500);
+	// inform objects of each other
+	sys.communication->SetSystemInfo(&sys);
+
+	// Startup completed, this task is no longer needed
+	vTaskDelete(nullptr);
 
 //	Test::PersistenceTest();
-	Test::PowerADC();
+//	Test::PowerADC();
 //	Test::ManualCommutation();
 //	Test::InductanceSense();
 //	Test::MotorFunctions();
 //	Test::MotorManualStart();
 //	Test::DifferentPWMs();
-	while(1);
 }
