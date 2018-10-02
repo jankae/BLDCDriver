@@ -25,8 +25,7 @@ static uint16_t VoltageLimit;
 
 static uint16_t currentZero = 2048;
 
-static uint32_t voltage = 0;
-static int32_t current = 0;
+static PowerADC::Measurement lastSample;
 static uint64_t voltage_sum = 0;
 static int64_t current_sum = 0;
 static uint32_t samples = 0;
@@ -91,11 +90,10 @@ bool HAL::BLDC::PowerADC::VoltageWithinLimits() {
 	return voltageInLimits;
 }
 
-PowerADC::Measurement HAL::BLDC::PowerADC::Get() {
+PowerADC::Measurement HAL::BLDC::PowerADC::GetSmoothed() {
 	Measurement m;
 	if(!samples) {
-		m.voltage = voltage;
-		m.current = current;
+		m = lastSample;
 	} else {
 		CriticalSection crit;
 		m.voltage = voltage_sum / samples;
@@ -103,6 +101,27 @@ PowerADC::Measurement HAL::BLDC::PowerADC::Get() {
 		voltage_sum = current_sum = samples = 0;
 	}
 	return m;
+}
+
+PowerADC::Measurement HAL::BLDC::PowerADC::GetInstant() {
+	return lastSample;
+}
+
+int32_t HAL::BLDC::PowerADC::CurrentFromRaw(uint16_t adc) {
+	int16_t raw = adc - currentZero;
+
+	const int16_t mV_ADC_Cur = -raw * Defines::ADC_Ref / Defines::ADC_max;
+	int32_t current = (int64_t) mV_ADC_Cur * 1000000UL
+			/ (Defines::currentShunt_uR * Defines::currentGain);
+	return current;
+}
+
+uint32_t HAL::BLDC::PowerADC::VoltageFromRaw(uint16_t adc) {
+	const uint16_t mV_ADC_Vol = adc * Defines::ADC_Ref / Defines::ADC_max;
+	uint32_t voltage = mV_ADC_Vol
+			* (Defines::voltageDividerRHigh + Defines::voltageDividerRLow)
+			/ Defines::voltageDividerRLow;
+	return voltage;
 }
 
 static void CalcVolCur() {
@@ -133,20 +152,11 @@ static void CalcVolCur() {
 		currentZero = avgCur;
 	}
 
-	// remove offset from current values
-	avgCur -= currentZero;
+	lastSample.voltage = PowerADC::VoltageFromRaw(avgVol);
+	lastSample.current = PowerADC::CurrentFromRaw(avgCur);
 
-	// transform into SI values
-	const uint16_t mV_ADC_Vol = avgVol * Defines::ADC_Ref / Defines::ADC_max;
-	const int16_t mV_ADC_Cur = -avgCur * Defines::ADC_Ref / Defines::ADC_max;
-	voltage = mV_ADC_Vol
-			* (Defines::voltageDividerRHigh + Defines::voltageDividerRLow)
-			/ Defines::voltageDividerRLow;
-	current = (int64_t) mV_ADC_Cur * 1000000UL
-			/ (Defines::currentShunt_uR * Defines::currentGain);
-
-	voltage_sum += voltage;
-	current_sum += current;
+	voltage_sum += lastSample.voltage;
+	current_sum += lastSample.current;
 	samples++;
 }
 
@@ -182,5 +192,4 @@ void HAL_ADC_LevelOutOfWindowCallback(ADC_HandleTypeDef* hadc) {
 		}
 	}
 }
-
 

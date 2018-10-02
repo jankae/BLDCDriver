@@ -1,6 +1,5 @@
 #pragma once
 
-
 namespace Core {
 // Forward declare used classes
 class Communication;

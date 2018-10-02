@@ -12,6 +12,10 @@
 Core::Propeller::Propeller(Data *data) {
 	d = data;
 
+	// Todo: read real values
+	d->diameter = 0.28f;
+	d->inertia = 0.00004f;
+
 	D4 = d->diameter * d->diameter * d->diameter * d->diameter;
 	D5 = D4 * d->diameter;
 
@@ -70,7 +74,7 @@ static float InterpolateJ(Core::Propeller::Data &d, float Cp, float rpm) {
 	} else if (i == d.nRPMs) {
 		return InterpolateJFromCp(d.rpm[i - 1], Cp);
 	} else {
-		return interpolate(rpm, d.rpm[i - 1].rpm, d.rpm[i - 1].rpm,
+		return interpolate(rpm, d.rpm[i - 1].rpm, d.rpm[i].rpm,
 				InterpolateJFromCp(d.rpm[i - 1], Cp),
 				InterpolateJFromCp(d.rpm[i], Cp));
 	}
@@ -103,7 +107,7 @@ static float InterpolateCt(Core::Propeller::Data &d, float J, float rpm) {
 	} else if (i == d.nRPMs) {
 		return InterpolateCtFromJ(d.rpm[i - 1], J);
 	} else {
-		return interpolate(rpm, d.rpm[i - 1].rpm, d.rpm[i - 1].rpm,
+		return interpolate(rpm, d.rpm[i - 1].rpm, d.rpm[i].rpm,
 				InterpolateCtFromJ(d.rpm[i - 1], J),
 				InterpolateCtFromJ(d.rpm[i], J));
 	}
@@ -161,17 +165,20 @@ static bool AddEntry(Core::Propeller::RPMTable *t, Core::Propeller::CoefficientE
 			break;
 		}
 	}
-	if (t->nentries > 0 && t->entries[i].J == e.J) {
+	if (t->nentries > 0 && i < t->nentries && t->entries[i].J == e.J) {
 		// perfect match, nothing to do for now
 	} else {
 		// need room for next entry
-		if(t->nentries < Core::Propeller::MaxDiffAdvance) {
+		if (t->nentries < Core::Propeller::MaxDiffAdvance) {
 			// move the following entries
 			const uint8_t nEntriesToMove = t->nentries - i;
-			memmove(&t->entries[i+1], &t->entries[i], nEntriesToMove * sizeof(e));
+			memmove(&t->entries[i + 1], &t->entries[i],
+					nEntriesToMove * sizeof(e));
 			t->nentries++;
 		} else {
 			// already at maximum capacity
+			Log::Uart(Log::Lvl::Err,
+					"Unable to add prop coefficient: max Js reached");
 			return false;
 		}
 	}
@@ -185,6 +192,7 @@ bool Core::Propeller::ParseDataLine(uint16_t rpm, char* line) {
 	for(uint8_t i=0;i<4;i++) {
 		extract[i] = strtof(line, &line);
 		if(!line) {
+			Log::Uart(Log::Lvl::Err, "Failed to parse prop coeff line: %s", line);
 			return false;
 		}
 	}
@@ -203,7 +211,7 @@ bool Core::Propeller::ParseDataLine(uint16_t rpm, char* line) {
 			break;
 		}
 	}
-	if (d->nRPMs > 0 && d->rpm[i].rpm == rpm) {
+	if (d->nRPMs > 0 && i < d->nRPMs && d->rpm[i].rpm == rpm) {
 		// perfect match, nothing to do for now
 	} else {
 		// need room for next entry
@@ -218,6 +226,7 @@ bool Core::Propeller::ParseDataLine(uint16_t rpm, char* line) {
 			d->nRPMs++;
 		} else {
 			// already at maximum capacity
+			Log::Uart(Log::Lvl::Err, "Unable to add prop coefficient: max RPMs reached");
 			return false;
 		}
 	}

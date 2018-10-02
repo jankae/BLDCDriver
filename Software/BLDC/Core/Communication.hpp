@@ -16,10 +16,11 @@ public:
 	void NewData(uint8_t d);
 private:
 	static void Task(void *argument);
-	static constexpr uint16_t MaxBufferSize = 50;
+	static constexpr uint16_t MaxBufferSize = 250;
 	static constexpr uint8_t endDelimiter = '\n';
 
 	Fifo<uint8_t, MaxBufferSize> fifo;
+	uint16_t lineEndings;
 	TaskHandle_t task;
 
 	Sysinfo *system;

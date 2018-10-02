@@ -95,6 +95,7 @@ void HAL::BLDC::Driver::NewPhaseVoltages(uint16_t *data) {
 		}
 	}
 
+	PWMperiodCnt++;
 	cnt++;
 
 	switch(state) {
@@ -136,11 +137,11 @@ void HAL::BLDC::Driver::NewPhaseVoltages(uint16_t *data) {
 			if (valid
 					&& max < idleDetectionThreshold - idleDetectionHysterese) {
 				// induced voltage too small to reliable track position, assume motor has stopped
-				Log::Uart(Log::Lvl::Inf, "Below threshold: idle tracking inactive");
+				Log::Uart(Log::Lvl::Dbg, "Below threshold: idle tracking inactive");
 				valid = false;
 			} else if (!valid
 					&& max > idleDetectionThreshold + idleDetectionHysterese) {
-				Log::Uart(Log::Lvl::Inf, "Above threshold: idle tracking active");
+				Log::Uart(Log::Lvl::Dbg, "Above threshold: idle tracking active");
 				valid = true;
 			}
 			if (valid) {
@@ -251,7 +252,7 @@ void HAL::BLDC::Driver::NewPhaseVoltages(uint16_t *data) {
 		/* Set output driver according to test step and check measured phases from previous step */
 		switch(cnt) {
 		case 1:
-			testResult = TestResult::OK;
+			result = (int) TestResult::OK;
 			LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::ConstHigh);
 			LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::Idle);
 			LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Idle);
@@ -261,7 +262,7 @@ void HAL::BLDC::Driver::NewPhaseVoltages(uint16_t *data) {
 			LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::ConstHigh);
 			LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Idle);
 			if(data[(int) LowLevel::Phase::A] < minHighVoltage) {
-				testResult = TestResult::Failure;
+				result = (int) TestResult::Failure;
 			}
 			break;
 		case 3:
@@ -269,7 +270,7 @@ void HAL::BLDC::Driver::NewPhaseVoltages(uint16_t *data) {
 			LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::Idle);
 			LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::ConstHigh);
 			if(data[(int) LowLevel::Phase::B] < minHighVoltage) {
-				testResult = TestResult::Failure;
+				result = (int) TestResult::Failure;
 			}
 			break;
 		case 4:
@@ -277,17 +278,51 @@ void HAL::BLDC::Driver::NewPhaseVoltages(uint16_t *data) {
 			LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::Idle);
 			LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Idle);
 			if(data[(int) LowLevel::Phase::C] < minHighVoltage) {
-				testResult = TestResult::Failure;
+				result = (int) TestResult::Failure;
 			}
-			if (testResult == TestResult::OK) {
+			if (result == (int) TestResult::OK) {
 				/* output driver seems to work, check for motor */
 				if (data[(int) LowLevel::Phase::A] < minHighVoltage
 						|| data[(int) LowLevel::Phase::B] < minHighVoltage) {
-					testResult = TestResult::NoMotor;
+					result = (int) TestResult::NoMotor;
 				}
 			}
 			NextState(State::Idle);
 			break;
+		}
+	}
+		break;
+	case State::MeasuringResistance: {
+		// apply low pwm values to all the phases, measure current after RL step response
+		constexpr uint32_t EstimatedTimeConstant_us = 1000;
+		// after 6 time constants the current has reached 99.7% of its final value, that is close enough
+		constexpr uint32_t WaitTime_us = 6 * EstimatedTimeConstant_us;
+		constexpr uint16_t WaitCycles = WaitTime_us * Defines::PWM_Frequency
+				/ 1000000UL;
+		constexpr uint16_t ResistancePWM = 150;
+		constexpr uint8_t StepSequence[6] = { 0, 3, 1, 4, 2, 5 };
+		uint8_t step = cnt / WaitCycles;
+		uint16_t cycle = cnt % WaitCycles;
+		if (cycle == 1) {
+			if (step <= 6) {
+				// energize the next phase
+				LowLevel::SetPWM(ResistancePWM);
+				SetStep(StepSequence[step]);
+			}
+			if (step > 0) {
+				// measure current and voltage from last cycle
+				auto m = PowerADC::GetInstant();
+				// calculate voltage and current at motor based on pwm value
+				uint32_t Vmotor = m.voltage * ResistancePWM / 1000;
+				int32_t Imotor = m.current * 1000 / ResistancePWM;
+				uint32_t resistance_mR = (uint64_t) Vmotor * 1000 / Imotor;
+				result += resistance_mR;
+			}
+			if (step >= 6) {
+				// measured all phases
+				result /= 6;
+				NextState(State::Idle);
+			}
 		}
 	}
 		break;
@@ -360,12 +395,12 @@ void HAL::BLDC::Driver::DMAHalfComplete() {
 void HAL::BLDC::Driver::InitiateStart() {
 	stateBuf = State::Idle;
 	if (RotorPos == -1) {
-		Log::Uart(Log::Lvl::Inf, "Starting motor from unknown position: initial position detection");
+		Log::Uart(Log::Lvl::Dbg, "Starting motor from unknown position: initial position detection");
 		// rotor position not known at the moment, detect using inductance sensing
 		HAL_ADC_Stop_DMA(&hadc1);
 		uint8_t pos = InductanceSensing::RotorPosition();
 		HAL_ADC_Start_DMA(&hadc1, (uint32_t*) ADCBuf, ADCBufferLength);
-		Log::Uart(Log::Lvl::Inf, "Position: %d", pos);
+		Log::Uart(Log::Lvl::Dbg, "Position: %d", pos);
 		if (pos > 0) {
 			if(dir == Direction::Forward) {
 				RotorPos = (9 - pos) % 6;
@@ -399,14 +434,19 @@ HAL::BLDC::Driver::~Driver() {
 
 Driver::TestResult HAL::BLDC::Driver::Test() {
 	stateBuf = State::Testing;
-	while (*(volatile State*) &stateBuf == State::Testing
-			|| *(volatile State*) &state == State::Testing)
-		;
-	return testResult;
+	WhileStateEquals(State::Testing);
+	return (TestResult) result;
 }
 
 bool HAL::BLDC::Driver::GotValidPosition() {
 	return (RotorPos != -1);
+}
+
+uint32_t HAL::BLDC::Driver::WindingResistance() {
+	stateBuf = State::MeasuringResistance;
+	result = 0;
+	WhileStateEquals(State::MeasuringResistance);
+	return result;
 }
 
 void HAL::BLDC::Driver::IncRotorPos() {
@@ -415,9 +455,25 @@ void HAL::BLDC::Driver::IncRotorPos() {
 	} else {
 		RotorPos = (RotorPos + 5) % 6;
 	}
+	commutationCnt++;
 }
 
 bool HAL::BLDC::Driver::IsRunning() {
 	return (*(volatile State*) &state == State::Powered_PastZero
 			|| *(volatile State*) &state == State::Powered_PreZero);
+}
+
+uint16_t HAL::BLDC::Driver::GetPWMSmoothed() {
+	uint32_t CommutationsPerSecond = (uint64_t) commutationCnt
+			* Defines::PWM_Frequency / PWMperiodCnt;
+	PWMperiodCnt = commutationCnt = 0;
+
+	uint16_t rpm = CommutationsPerSecond * 60 / 6 / (MotorPoles / 2);
+
+	return rpm;
+}
+
+void HAL::BLDC::Driver::WhileStateEquals(State s) {
+	while (*(volatile State*) &stateBuf == s || *(volatile State*) &state == s)
+		;
 }

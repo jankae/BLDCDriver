@@ -20,6 +20,7 @@ public:
 		Idle,					// unpowered, either stopped or running from external force/momentum
 		Idle_Braking,			// regenerative braking active but DC bus can't take the charge -> idling
 		Testing,				// Controller performs selftest, motor is not moving
+		MeasuringResistance,
 	};
 
 	enum class TestResult : uint8_t {
@@ -50,6 +51,9 @@ public:
 	bool GotValidPosition();
 	TestResult Test();
 
+	uint32_t WindingResistance();
+	uint16_t GetPWMSmoothed();
+
 	static void DMAComplete();
 	static void DMAHalfComplete();
 
@@ -61,10 +65,12 @@ private:
 	static Driver *Inst;
 	static constexpr uint32_t minPWM = 100;
 	static constexpr uint32_t CommutationTimeoutms = 50;
+	static constexpr uint8_t MotorPoles = 12;
 	void NewPhaseVoltages(uint16_t *data);
 	void SetStep(uint8_t step);
 	void SetIdle();
 	void IncRotorPos();
+	void WhileStateEquals(State s);
 
 	State state, stateBuf;
 	uint32_t cnt;
@@ -76,7 +82,9 @@ private:
 	int8_t RotorPos;
 	Direction dir;
 
-	TestResult testResult;
+	uint32_t commutationCnt;
+	uint32_t PWMperiodCnt;
+	uint32_t result;
 };
 }
 }

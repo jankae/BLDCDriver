@@ -10,6 +10,10 @@ void PowerADC();
 
 void ManualCommutation();
 
+void DummyWindspeedEstimation();
+
+void MotorCharacterisation();
+
 //void PersistenceTest();
 
 }

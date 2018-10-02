@@ -100,6 +100,10 @@ static void ConfigureHardware(uint32_t *SettingBuffer, uint16_t *CurrentBuf) {
 	SettingBuffer[0] = TIM1->ARR;
 	TIM1->ARR = PWMPeriod - 1;
 
+	// Disable the TIM1 CCR4 match (pauses phase voltage sampling)
+	SettingBuffer[2] = TIM1->CCR4;
+	TIM1->CCR4 = 0xFFFF;
+
 	// Setup current ADC sampling rate
 	SettingBuffer[1] = TIM15->ARR;
 	// sample synchronous with every second step
@@ -151,6 +155,7 @@ static void ReconfigureHardware(uint32_t *SettingBuffer) {
 	// Restore changed timer settings
 	TIM1->ARR = SettingBuffer[0];
 	TIM15->ARR = SettingBuffer[1];
+	TIM1->CCR4 = SettingBuffer[2];
 
 	// Update all timers
 	TIM1->EGR = TIM_EGR_UG;
@@ -163,15 +168,19 @@ static void ReconfigureHardware(uint32_t *SettingBuffer) {
 	PowerADC::Resume();
 }
 
-uint16_t HAL::BLDC::InductanceSensing::RotorPosition() {
+static void MeasurePhaseCurrents(uint16_t *adcSamples) {
 	done = false;
-	uint32_t buf[2];
-	uint16_t I[12];
-	ConfigureHardware(buf, I);
+	uint32_t buf[3];
+	ConfigureHardware(buf, adcSamples);
 	while (!done) {
 
 	}
 	ReconfigureHardware(buf);
+}
+
+uint16_t HAL::BLDC::InductanceSensing::RotorPosition() {
+	uint16_t I[12];
+	MeasurePhaseCurrents(I);
 
 	// compares inverted with respect to paper as ADC measures lower values for higher currents
 	bool I_II = I[0] < I[2];
@@ -197,6 +206,23 @@ uint16_t HAL::BLDC::InductanceSensing::RotorPosition() {
 				I[0], I[1], I[2], I[3], I[4], I[5]);
 	}
 	return section;
+}
+
+uint32_t HAL::BLDC::InductanceSensing::WindingInductance() {
+	uint16_t I[12];
+	MeasurePhaseCurrents(I);
+
+	//calculate average current
+	uint16_t avgCur = (I[0] + I[2] + I[4] + I[6] + I[8] + I[10]) / 6;
+	uint16_t avgVol = (I[1] + I[3] + I[5] + I[7] + I[9] + I[11]) / 6;
+
+	auto voltage = PowerADC::VoltageFromRaw(avgVol);
+	auto current = PowerADC::CurrentFromRaw(avgCur);
+
+	int32_t dIdt = current * 1000 / pulseLength; // in A/s
+	uint32_t L = (uint64_t) voltage * 1000000UL / dIdt; // in nH
+
+	return L;
 }
 
 extern "C" {

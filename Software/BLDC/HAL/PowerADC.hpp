@@ -23,7 +23,12 @@ void DMAHalfComplete();
 
 void PrintBuffer();
 
-Measurement Get();
+int32_t CurrentFromRaw(uint16_t adc);
+uint32_t VoltageFromRaw(uint16_t adc);
+
+Measurement GetSmoothed();
+Measurement GetInstant();
+
 
 }
 }

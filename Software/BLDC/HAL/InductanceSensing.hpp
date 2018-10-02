@@ -7,6 +7,7 @@ namespace BLDC {
 namespace InductanceSensing {
 
 uint16_t RotorPosition();
+uint32_t WindingInductance();
 
 }
 }

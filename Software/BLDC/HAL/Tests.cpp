@@ -9,6 +9,11 @@
 #include "InductanceSensing.hpp"
 #include "PowerADC.hpp"
 #include "Persistance.hpp"
+#include "Sysinfo.hpp"
+#include "Propeller.hpp"
+
+extern Core::Sysinfo sys;
+extern HAL::BLDC::Driver *d;
 
 using namespace HAL::BLDC;
 
@@ -198,7 +203,7 @@ void Test::PowerADC() {
 	Driver d;
 	d.InitiateStart();
 	while(1) {
-		auto m = HAL::BLDC::PowerADC::Get();
+		auto m = HAL::BLDC::PowerADC::GetSmoothed();
 		Log::Uart(Log::Lvl::Inf, "U: %lu, I: %ld", m.voltage, m.current);
 		vTaskDelay(5);
 	}
@@ -251,6 +256,44 @@ void Test::ManualCommutation() {
 	LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Idle);
 }
 
+void Test::DummyWindspeedEstimation() {
+	float power = 30.0f;
+	uint16_t rpm = 4000;
+	while(1) {
+		sys.prop->Update((float) rpm, power);
+	}
+}
+
+void Test::MotorCharacterisation() {
+	Log::Uart(Log::Lvl::Inf, "Starting motor characterisation");
+	vTaskDelay(100);
+	uint32_t inductance = InductanceSensing::WindingInductance();
+	Log::Uart(Log::Lvl::Inf, "Winding inductance: %lunH", inductance);
+	uint32_t resistance = d->WindingResistance();
+	Log::Uart(Log::Lvl::Inf, "Winding resistance: %lumR", resistance);
+	vTaskDelay(10);
+	d->Stop();
+	vTaskDelay(100);
+	d->FreeRunning();
+	vTaskDelay(100);
+	d->InitiateStart();
+	vTaskDelay(500);
+	d->SetPWM(200);
+	vTaskDelay(1000);
+	// dummy measurements to reset smoothed values
+	PowerADC::GetSmoothed();
+	d->GetPWMSmoothed();
+	vTaskDelay(1000);
+	uint16_t rpm = d->GetPWMSmoothed();
+	auto m = PowerADC::GetSmoothed();
+	d->FreeRunning();
+
+	uint32_t Vmotor = m.voltage * 200 / 1000;
+	int32_t Imotor = m.current * 1000 / 200;
+	uint32_t backEMF = Vmotor - Imotor * resistance / 1000;
+	uint32_t Kv = (uint32_t) rpm * 1000 / backEMF;
+	Log::Uart(Log::Lvl::Inf, "Kv: %lu", Kv);
+}
 //static uint32_t testdata[4] __attribute__ ((section (".ccmpersist")));
 //
 //void Test::PersistenceTest() {
