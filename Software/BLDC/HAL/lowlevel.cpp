@@ -6,6 +6,8 @@
 #include "Logging.hpp"
 #include "Defines.hpp"
 
+using namespace HAL::BLDC;
+
 static constexpr uint8_t PosFromMask(uint32_t mask) {
 	uint8_t pos = 0;
 	while (!(mask & 0x01)) {
@@ -33,15 +35,15 @@ static void AdjustSamplingToPWM(uint16_t pwm) {
 	constexpr uint16_t ADCOverallCycles = 3 * (ADCSamplingCycles + 12);
 	constexpr uint16_t OverallTimerCycles = ADCOverallCycles * TimerClockMHz / ADCClockMHz;
 
-	constexpr uint16_t PWMOffSamplingPoint = 1000;
+	constexpr uint16_t PWMOffSamplingPoint = 560;//Defines::PWM_max - 100;
 	constexpr uint16_t lowPWMThreshold = 160;
 	constexpr uint16_t highPWMThreshold = PWMOffSamplingPoint - 300;
 	constexpr uint16_t PWMOnSamplingPoint = lowPWMThreshold - OverallTimerCycles;
 
-	static_assert(PWMOnSamplingPoint >= 10 && PWMOnSamplingPoint <= 800, "Unplausible early sampling point");
+//	static_assert(PWMOnSamplingPoint >= 10 && PWMOnSamplingPoint <= 800, "Unplausible early sampling point");
 
 	static bool PWMOnSampling = false;
-	if (PWMOnSampling && pwm <= lowPWMThreshold) {
+	if (PWMOnSampling && pwm < lowPWMThreshold) {
 		PWMOnSampling = false;
 		Log::Uart(Log::Lvl::Dbg, "Switching to off phase sampling");
 	} else if (!PWMOnSampling && pwm > highPWMThreshold) {

@@ -56,7 +56,7 @@ void Start() {
 	// inform objects of each other
 	sys.communication->SetSystemInfo(&sys);
 
-//	Test::MotorFunctions();
+	Test::MotorFunctions();
 	Test::WindEstimation();
 
 	// Startup completed, this task is no longer needed

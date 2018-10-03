@@ -192,34 +192,37 @@ void HAL::BLDC::Driver::NewPhaseVoltages(uint16_t *data) {
 		break;
 	case State::Powered_PreZero:
 	{
-		constexpr uint16_t nPulsesSkip = 2;
+		constexpr uint16_t nPulsesSkip = 1;
 		constexpr uint16_t ZeroThreshold = 10;
 		constexpr uint32_t timeoutThresh = CommutationTimeoutms
 				* Defines::PWM_Frequency / 1000;
 
-		const uint16_t zero = data[(int) nPhaseHigh] / 2;
-		static bool above = false;
+		const uint16_t supply = data[(int) nPhaseHigh];
 
 		uint16_t skip = nPulsesSkip;
 		if(!DetectorArmed) {
 			// this is the first commutation from a stopped position
-			// wait a little bit longe until enabling detector
+			// wait a little bit longer until enabling detector
 			skip += 10;
 		}
 
 		if (cnt == 1) {
 			SetStep(RotorPos);
 		} else if (cnt > skip) {
-			if (zero > 100 && !above) {
-				above = true;
-				Log::Uart(Log::Lvl::Inf, "Switched to on phase sampling");
-			} else if(zero < 100 && above) {
-				above = false;
-				Log::Uart(Log::Lvl::Inf, "Switched to off phase sampling");
+			if(cnt >= timeoutThresh) {
+				// failed to detect the next commutation in time, motor probably stalled
+				Log::Uart(Log::Lvl::Wrn, "Commutation timed out");
+				IncRotorPos();
+				IncRotorPos();
+				DetectorArmed = false;
+				NextState(State::Powered_PreZero);
 			}
 
+			const uint16_t phase = data[(int) nPhaseIdle];
+
 			bool rising = (dir == Direction::Forward) ^ (RotorPos & 0x01);
-			int16_t compare = data[(int) nPhaseIdle] - zero;
+			const uint16_t zero = supply / 2;
+			int16_t compare = phase - zero;
 
 			if (DetectorArmed) {
 				if ((compare <= 0 && !rising)
@@ -235,20 +238,15 @@ void HAL::BLDC::Driver::NewPhaseVoltages(uint16_t *data) {
 					DetectorArmed = true;
 				}
 			}
-			if(cnt >= timeoutThresh) {
-				// failed to detect the next commutation in time, motor probably stalled
-				Log::Uart(Log::Lvl::Wrn, "Commutation timed out");
-				RotorPos = -1;
-				NextState(State::Idle);
-			}
 		}
 	}
-	break;
+		break;
 	case State::Powered_PastZero:
 	{
 		if(cnt >= timeToZero) {
 			// next commutation is due
 			IncRotorPos();
+			SetStep(RotorPos);
 			NextState(State::Powered_PreZero);
 		}
 	}
@@ -463,7 +461,7 @@ bool HAL::BLDC::Driver::IsRunning() {
 			|| *(volatile State*) &state == State::Powered_PreZero);
 }
 
-uint16_t HAL::BLDC::Driver::GetPWMSmoothed() {
+uint16_t HAL::BLDC::Driver::GetRPMSmoothed() {
 	uint32_t CommutationsPerSecond = (uint64_t) commutationCnt
 			* Defines::PWM_Frequency / PWMperiodCnt;
 	PWMperiodCnt = commutationCnt = 0;
@@ -473,7 +471,7 @@ uint16_t HAL::BLDC::Driver::GetPWMSmoothed() {
 	return rpm;
 }
 
-uint16_t HAL::BLDC::Driver::GetPWMInstant() {
+uint16_t HAL::BLDC::Driver::GetRPMInstant() {
 	if (IsRunning()) {
 		uint32_t PWMPeriodSum = CommutationCycles[0] + CommutationCycles[1]
 				+ CommutationCycles[2] + CommutationCycles[3]
@@ -492,7 +490,7 @@ uint16_t HAL::BLDC::Driver::GetPWMInstant() {
 HAL::BLDC::Driver::MotorData HAL::BLDC::Driver::GetData() {
 	MotorData d;
 	auto m = PowerADC::GetSmoothed();
-	d.rpm = GetPWMInstant();
+	d.rpm = GetRPMInstant();
 	d.current = m.current;
 	d.voltage = m.voltage;
 

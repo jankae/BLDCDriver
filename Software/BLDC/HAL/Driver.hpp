@@ -51,8 +51,8 @@ public:
 	TestResult Test();
 
 	uint32_t WindingResistance();
-	uint16_t GetPWMSmoothed();
-	uint16_t GetPWMInstant();
+	uint16_t GetRPMSmoothed();
+	uint16_t GetRPMInstant();
 
 	static void DMAComplete();
 	static void DMAHalfComplete();

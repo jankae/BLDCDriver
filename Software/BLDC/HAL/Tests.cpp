@@ -55,14 +55,28 @@ void Test::MotorFunctions(void) {
 	{
 		/* Motor start test */
 		while(1) {
-			uint32_t resistance = d->WindingResistance();
 			vTaskDelay(500);
 			Start(d);
 			vTaskDelay(500);
+			auto m = PowerADC::GetSmoothed();
+			uint16_t pwm;
+			uint16_t rpm = d->GetRPMSmoothed();
+			for(pwm = 100;pwm<1000;pwm++) {
+				d->SetPWM(pwm);
+				vTaskDelay(10);
+				m = PowerADC::GetSmoothed();
+				rpm = d->GetRPMSmoothed();
+//				if(pwm % 10 == 0) {
+					Log::Uart(Log::Lvl::Inf, "PWM: %d, V: %lu I: %lu, RPM: %d", pwm,
+							m.voltage, m.current, rpm);
+//				}
+				if(m.current >= 15000) {
+					break;
+				}
+			}
 			d->FreeRunning();
-			vTaskDelay(500);
-			d->Stop();
-			vTaskDelay(500);
+
+			vTaskDelay(5000);
 		}
 	}
 
@@ -296,9 +310,9 @@ void Test::MotorCharacterisation() {
 	vTaskDelay(1000);
 	// dummy measurements to reset smoothed values
 	PowerADC::GetSmoothed();
-	d->GetPWMSmoothed();
+	d->GetRPMSmoothed();
 	vTaskDelay(1000);
-	uint16_t rpm = d->GetPWMSmoothed();
+	uint16_t rpm = d->GetRPMSmoothed();
 	auto m = PowerADC::GetSmoothed();
 	d->FreeRunning();
 
@@ -322,13 +336,13 @@ void Test::WindEstimation() {
 	d->InitiateStart();
 	vTaskDelay(500);
 	d->SetPWM(PWMvalue);
-	d->GetPWMSmoothed();
+	d->GetRPMSmoothed();
 	PowerADC::GetSmoothed();
 	uint32_t cnt = 0;
 	Log::Uart(Log::Lvl::Inf, "Prop: Vmotor Imotor Power RPM J Ct Cp V");
 	while (1) {
 		vTaskDelay(10);
-		auto rpm = d->GetPWMSmoothed();
+		auto rpm = d->GetRPMSmoothed();
 		auto m = PowerADC::GetSmoothed();
 
 		// calculate motor output power
