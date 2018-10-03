@@ -26,24 +26,23 @@ void Test::DifferentPWMs(void) {
 }
 
 void Test::MotorFunctions(void) {
-	auto Start = [](Driver &d) -> bool {
+	auto Start = [](Driver *d) -> bool {
 		constexpr uint8_t attempts = 10;
 		uint8_t attempt_cnt = 0;
-		while(!d.IsRunning()) {
+		while(!d->IsRunning()) {
 			attempt_cnt++;
 			if(attempt_cnt > attempts) {
 				Log::Uart(Log::Lvl::Err, "Unable to start motor");
 				return false;
 			}
 			Log::Uart(Log::Lvl::Dbg, "Starting motor: attempt %d", attempt_cnt);
-			d.InitiateStart();
-			vTaskDelay(100);
+			d->InitiateStart();
+			vTaskDelay(1000);
 		}
 		return true;
 	};
 
-	Driver d;
-	switch(d.Test()) {
+	switch(d->Test()) {
 	case Driver::TestResult::Failure:
 		Log::Uart(Log::Lvl::Crt, "Driver reports hardware failure");
 		return;
@@ -52,6 +51,20 @@ void Test::MotorFunctions(void) {
 		return;
 	}
 	Log::Uart(Log::Lvl::Inf, "Driver test passed");
+
+	{
+		/* Motor start test */
+		while(1) {
+			uint32_t resistance = d->WindingResistance();
+			vTaskDelay(500);
+			Start(d);
+			vTaskDelay(500);
+			d->FreeRunning();
+			vTaskDelay(500);
+			d->Stop();
+			vTaskDelay(500);
+		}
+	}
 
 	{
 		/* Speed change Test */
@@ -67,10 +80,10 @@ void Test::MotorFunctions(void) {
 		}
 
 		vTaskDelay(1000);
-		d.SetPWM(300);
+		d->SetPWM(300);
 		vTaskDelay(500);
 //		HAL_GPIO_WritePin(TRIGGER_GPIO_Port, TRIGGER_Pin, GPIO_PIN_SET);
-		d.SetPWM(100);
+		d->SetPWM(100);
 		vTaskDelay(5000);
 //		d.FreeRunning();
 
@@ -167,6 +180,7 @@ static void SetStep(uint8_t step) {
 }
 
 void Test::InductanceSense() {
+	delete d;
 	while (1) {
 		uint16_t pos = InductanceSensing::RotorPosition();
 		Log::Uart(Log::Lvl::Inf, "Pos: %d", pos);
@@ -293,6 +307,46 @@ void Test::MotorCharacterisation() {
 	uint32_t backEMF = Vmotor - Imotor * resistance / 1000;
 	uint32_t Kv = (uint32_t) rpm * 1000 / backEMF;
 	Log::Uart(Log::Lvl::Inf, "Kv: %lu", Kv);
+}
+
+void Test::WindEstimation() {
+	Log::Uart(Log::Lvl::Inf, "Starting motor characterisation");
+	vTaskDelay(100);
+	uint32_t resistance = d->WindingResistance();
+	vTaskDelay(500);
+	Log::Uart(Log::Lvl::Inf, "Winding resistance: %lumR", resistance);
+
+	constexpr uint16_t PWMvalue = 600;
+
+
+	d->InitiateStart();
+	vTaskDelay(500);
+	d->SetPWM(PWMvalue);
+	d->GetPWMSmoothed();
+	PowerADC::GetSmoothed();
+	uint32_t cnt = 0;
+	Log::Uart(Log::Lvl::Inf, "Prop: Vmotor Imotor Power RPM J Ct Cp V");
+	while (1) {
+		vTaskDelay(10);
+		auto rpm = d->GetPWMSmoothed();
+		auto m = PowerADC::GetSmoothed();
+
+		// calculate motor output power
+		uint32_t Vmotor = m.voltage * PWMvalue / 1000;
+		int32_t Imotor = m.current * 1000 / PWMvalue;
+		uint32_t backEMF = Vmotor - Imotor * resistance / 1000;
+		float power = (float) backEMF / 1000 * (float) Imotor / 1000;
+		constexpr float efficiency = 0.85;
+		power *= efficiency;
+		sys.prop->Update(rpm, power);
+		if (++cnt >= 50) {
+			Log::Uart(Log::Lvl::Inf,
+					"Prop: %lu %lu %5.2f %d %4.2f %9.6f %9.6f %9.3f", Vmotor,
+					Imotor, power, rpm, sys.prop->J, sys.prop->Ct, sys.prop->Cp,
+					sys.prop->V);
+			cnt = 0;
+		}
+	}
 }
 //static uint32_t testdata[4] __attribute__ ((section (".ccmpersist")));
 //

@@ -4,6 +4,7 @@
 #include "stm32f3xx_hal.h"
 #include "PowerADC.hpp"
 #include "Logging.hpp"
+#include "Defines.hpp"
 
 using namespace HAL::BLDC;
 
@@ -102,7 +103,7 @@ static void ConfigureHardware(uint32_t *SettingBuffer, uint16_t *CurrentBuf) {
 
 	// Disable the TIM1 CCR4 match (pauses phase voltage sampling)
 	SettingBuffer[2] = TIM1->CCR4;
-	TIM1->CCR4 = 0xFFFF;
+	TIM1->CCR4 = Defines::PWM_max + 1;
 
 	// Setup current ADC sampling rate
 	SettingBuffer[1] = TIM15->ARR;
@@ -203,7 +204,7 @@ uint16_t HAL::BLDC::InductanceSensing::RotorPosition() {
 		section = 6;
 	} else {
 		Log::Uart(Log::Lvl::Err, "Inductance sensing failed: %d %d %d %d %d %d",
-				I[0], I[1], I[2], I[3], I[4], I[5]);
+				I[0], I[2], I[4], I[6], I[8], I[10]);
 	}
 	return section;
 }

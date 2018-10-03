@@ -13,6 +13,7 @@ void ManualCommutation();
 void DummyWindspeedEstimation();
 
 void MotorCharacterisation();
+void WindEstimation();
 
 //void PersistenceTest();
 

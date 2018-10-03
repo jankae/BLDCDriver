@@ -25,7 +25,7 @@ void Start() {
 	Persistance::Load();
 
 	// Initialize hardware
-	Log::Init(Log::Lvl::Inf);
+	Log::Init(Log::Lvl::Dbg);
 
 	vTaskDelay(10);
 	Log::Uart(Log::Lvl::Inf, "Start");
@@ -56,7 +56,8 @@ void Start() {
 	// inform objects of each other
 	sys.communication->SetSystemInfo(&sys);
 
-	Test::MotorCharacterisation();
+//	Test::MotorFunctions();
+	Test::WindEstimation();
 
 	// Startup completed, this task is no longer needed
 	vTaskDelete(nullptr);

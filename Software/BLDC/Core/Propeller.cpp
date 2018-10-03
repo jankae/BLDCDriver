@@ -11,7 +11,6 @@
 
 Core::Propeller::Propeller(Data *data) {
 	d = data;
-
 	// Todo: read real values
 	d->diameter = 0.28f;
 	d->inertia = 0.00004f;
@@ -114,6 +113,10 @@ static float InterpolateCt(Core::Propeller::Data &d, float J, float rpm) {
 }
 
 void Core::Propeller::Update(float rpm, float appliedPower) {
+	if (rpm < 400) {
+		// calculation is unreliable for low rpm, skip
+		return;
+	}
 	const float n = rpm / 60;
 	const float n2 = n * n;
 	const float n3 = n2 * n;
@@ -123,12 +126,9 @@ void Core::Propeller::Update(float rpm, float appliedPower) {
 	// update torque
 	Torque = Cp * rho * n2 * D5 / (2 * 3.141f);
 
-	float J = InterpolateJ(*d, Cp, rpm);
+	J = InterpolateJ(*d, Cp, rpm);
 
 	V = J * n * d->diameter;
-
-	// update J to smoothed value
-	J = V / (n * d->diameter);
 
 	Ct = InterpolateCt(*d, J, rpm);
 

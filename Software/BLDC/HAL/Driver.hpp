@@ -36,6 +36,8 @@ public:
 
 	void SetPWM(int16_t promille) override;
 
+	MotorData GetData() override;
+
 	void FreeRunning();
 	void Stop();
 
@@ -44,15 +46,13 @@ public:
 
 	void InitiateStart() override;
 
-	void RegisterIncCallback(IncCallback c, void *ptr) override;
-	void RegisterADCCallback(ADCCallback c, void *ptr) override;
-
 	bool IsRunning();
 	bool GotValidPosition();
 	TestResult Test();
 
 	uint32_t WindingResistance();
 	uint16_t GetPWMSmoothed();
+	uint16_t GetPWMInstant();
 
 	static void DMAComplete();
 	static void DMAHalfComplete();
@@ -84,6 +84,7 @@ private:
 
 	uint32_t commutationCnt;
 	uint32_t PWMperiodCnt;
+	std::array<uint32_t, 6> CommutationCycles;
 	uint32_t result;
 };
 }

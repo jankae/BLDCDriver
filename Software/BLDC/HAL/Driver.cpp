@@ -20,9 +20,6 @@ static constexpr int ADCBufferLength = 6;
 
 static uint16_t ADCBuf[ADCBufferLength];
 
-static Driver::IncCallback IncCB;
-static void* IncPtr;
-
 void HAL::BLDC::Driver::SetStep(uint8_t step) {
 	switch (step) {
 	case 0:
@@ -111,6 +108,7 @@ void HAL::BLDC::Driver::NewPhaseVoltages(uint16_t *data) {
 	{
 		// do not apply any voltages to the phase terminals
 		SetIdle();
+		CommutationCycles.fill(2 * Defines::PWM_Frequency);
 #ifdef DRIVER_BUFFER
 		if(cnt % 30 == 0) {
 			if(buffer.getLevel() > 0) {
@@ -202,9 +200,16 @@ void HAL::BLDC::Driver::NewPhaseVoltages(uint16_t *data) {
 		const uint16_t zero = data[(int) nPhaseHigh] / 2;
 		static bool above = false;
 
+		uint16_t skip = nPulsesSkip;
+		if(!DetectorArmed) {
+			// this is the first commutation from a stopped position
+			// wait a little bit longe until enabling detector
+			skip += 10;
+		}
+
 		if (cnt == 1) {
 			SetStep(RotorPos);
-		} else if (cnt > nPulsesSkip) {
+		} else if (cnt > skip) {
 			if (zero > 100 && !above) {
 				above = true;
 				Log::Uart(Log::Lvl::Inf, "Switched to on phase sampling");
@@ -221,6 +226,7 @@ void HAL::BLDC::Driver::NewPhaseVoltages(uint16_t *data) {
 						|| (compare >= ZeroThreshold && rising)) {
 					// crossing detected
 					timeToZero = cnt;
+					CommutationCycles[RotorPos] = cnt;
 					NextState(State::Powered_PastZero);
 				}
 			} else {
@@ -358,18 +364,8 @@ void HAL::BLDC::Driver::SetPWM(int16_t promille) {
 	LowLevel::SetPWM(promille);
 }
 
-void HAL::BLDC::Driver::RegisterIncCallback(IncCallback c, void* ptr) {
-	IncCB = c;
-	IncPtr = ptr;
-}
-
 Driver::State HAL::BLDC::Driver::GetState() {
 	return state;
-}
-
-void HAL::BLDC::Driver::RegisterADCCallback(ADCCallback c, void* ptr) {
-	UNUSED(c);
-	UNUSED(ptr);
 }
 
 void HAL::BLDC::Driver::FreeRunning() {
@@ -393,6 +389,10 @@ void HAL::BLDC::Driver::DMAHalfComplete() {
 }
 
 void HAL::BLDC::Driver::InitiateStart() {
+	if (IsRunning()) {
+		// nothing to do, motor already running
+		return;
+	}
 	stateBuf = State::Idle;
 	if (RotorPos == -1) {
 		Log::Uart(Log::Lvl::Dbg, "Starting motor from unknown position: initial position detection");
@@ -471,6 +471,32 @@ uint16_t HAL::BLDC::Driver::GetPWMSmoothed() {
 	uint16_t rpm = CommutationsPerSecond * 60 / 6 / (MotorPoles / 2);
 
 	return rpm;
+}
+
+uint16_t HAL::BLDC::Driver::GetPWMInstant() {
+	if (IsRunning()) {
+		uint32_t PWMPeriodSum = CommutationCycles[0] + CommutationCycles[1]
+				+ CommutationCycles[2] + CommutationCycles[3]
+				+ CommutationCycles[4] + CommutationCycles[5];
+		uint32_t CommutationsPerSecond = 6 * Defines::PWM_Frequency
+				/ PWMPeriodSum;
+
+		uint16_t rpm = CommutationsPerSecond * 60 / 6 / (MotorPoles / 2);
+
+		return rpm;
+	} else {
+		return 0;
+	}
+}
+
+HAL::BLDC::Driver::MotorData HAL::BLDC::Driver::GetData() {
+	MotorData d;
+	auto m = PowerADC::GetSmoothed();
+	d.rpm = GetPWMInstant();
+	d.current = m.current;
+	d.voltage = m.voltage;
+
+	return d;
 }
 
 void HAL::BLDC::Driver::WhileStateEquals(State s) {
