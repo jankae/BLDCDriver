@@ -9,6 +9,7 @@ namespace PowerADC {
 using Measurement = struct meas {
 	uint32_t voltage; // in mV
 	int32_t current; // in mA
+	uint32_t energy; // in uJ
 };
 
 void Init();

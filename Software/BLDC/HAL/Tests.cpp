@@ -56,27 +56,27 @@ void Test::MotorFunctions(void) {
 		/* Motor start test */
 		while(1) {
 			vTaskDelay(500);
-			Start(d);
-			vTaskDelay(500);
+			d->InitiateStart();
+			vTaskDelay(1500);
 			auto m = PowerADC::GetSmoothed();
 			uint16_t pwm;
 			uint16_t rpm = d->GetRPMSmoothed();
-			for(pwm = 100;pwm<1000;pwm++) {
-				d->SetPWM(pwm);
-				vTaskDelay(10);
-				m = PowerADC::GetSmoothed();
-				rpm = d->GetRPMSmoothed();
-//				if(pwm % 10 == 0) {
-					Log::Uart(Log::Lvl::Inf, "PWM: %d, V: %lu I: %lu, RPM: %d", pwm,
-							m.voltage, m.current, rpm);
+//			for(pwm = 100;pwm<1000;pwm++) {
+//				d->SetPWM(pwm);
+//				vTaskDelay(10);
+//				m = PowerADC::GetSmoothed();
+//				rpm = d->GetRPMSmoothed();
+////				if(pwm % 10 == 0) {
+//					Log::Uart(Log::Lvl::Inf, "PWM: %d, V: %lu I: %lu, RPM: %d", pwm,
+//							m.voltage, m.current, rpm);
+////				}
+//				if(m.current >= 15000) {
+//					break;
 //				}
-				if(m.current >= 15000) {
-					break;
-				}
-			}
+//			}
 			d->FreeRunning();
-
-			vTaskDelay(5000);
+			vTaskDelay(1000);
+			d->Stop();
 		}
 	}
 
@@ -312,15 +312,53 @@ void Test::MotorCharacterisation() {
 	PowerADC::GetSmoothed();
 	d->GetRPMSmoothed();
 	vTaskDelay(1000);
-	uint16_t rpm = d->GetRPMSmoothed();
+	uint16_t highRPM = d->GetRPMSmoothed();
 	auto m = PowerADC::GetSmoothed();
-	d->FreeRunning();
 
 	uint32_t Vmotor = m.voltage * 200 / 1000;
 	int32_t Imotor = m.current * 1000 / 200;
 	uint32_t backEMF = Vmotor - Imotor * resistance / 1000;
-	uint32_t Kv = (uint32_t) rpm * 1000 / backEMF;
+	uint32_t Kv = (uint32_t) highRPM * 1000 / backEMF;
 	Log::Uart(Log::Lvl::Inf, "Kv: %lu", Kv);
+
+	d->SetPWM(100);
+	d->GetRPMSmoothed();
+	vTaskDelay(1000);
+	uint16_t lowRPM = d->GetRPMSmoothed();
+	PowerADC::GetSmoothed();
+	vTaskDelay(10);
+	auto slow = PowerADC::GetSmoothed();
+	d->SetPWM(200);
+	uint16_t PWMThreshold = lowRPM + (highRPM - lowRPM) * 0.9;
+	uint16_t nowRPM = 0;
+	auto t1 = HAL_GetTick();
+	while (nowRPM < PWMThreshold) {
+		nowRPM = d->GetRPMInstant();
+	}
+	auto t2 = HAL_GetTick();
+	auto acc = PowerADC::GetSmoothed();
+	vTaskDelay(100);
+	PowerADC::GetSmoothed();
+	vTaskDelay(10);
+	auto fast = PowerADC::GetSmoothed();
+	vTaskDelay(500);
+	d->FreeRunning();
+
+	// extra energy needed for speedup
+	uint32_t energySlow_ms = slow.energy / 10;
+	uint32_t energyFast_ms = fast.energy / 10;
+	uint32_t energyExcess = acc.energy
+			- (energySlow_ms + energyFast_ms) / 2 * (t2 - t1);
+	float low_rad = (float) lowRPM * 2 * 3.141f / 60;
+	float high_rad = (float) highRPM * 2 * 3.141f / 60;
+	float E = (float) energyExcess / 1000000UL;
+	float I = 2 * E / (high_rad * high_rad - low_rad * low_rad);
+
+
+	Log::Uart(Log::Lvl::Inf, "RPM: %d/%d/%d, took %lums", lowRPM, highRPM,
+			nowRPM, t2 - t1);
+	Log::Uart(Log::Lvl::Inf, "Energy: %lu/%lu/%lu", slow.energy, acc.energy, fast.energy);
+	Log::Uart(Log::Lvl::Inf, "Inertia: %f, E: %f", I, E);
 }
 
 void Test::WindEstimation() {

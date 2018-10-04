@@ -98,7 +98,9 @@ PowerADC::Measurement HAL::BLDC::PowerADC::GetSmoothed() {
 		CriticalSection crit;
 		m.voltage = voltage_sum / samples;
 		m.current = current_sum / samples;
+		m.energy = lastSample.energy;
 		voltage_sum = current_sum = samples = 0;
+		lastSample.energy = 0;
 	}
 	return m;
 }
@@ -154,6 +156,8 @@ static void CalcVolCur() {
 
 	lastSample.voltage = PowerADC::VoltageFromRaw(avgVol);
 	lastSample.current = PowerADC::CurrentFromRaw(avgCur);
+	uint64_t power = lastSample.voltage * lastSample.current;
+	lastSample.energy += power / Defines::PWM_Frequency;
 
 	voltage_sum += lastSample.voltage;
 	current_sum += lastSample.current;

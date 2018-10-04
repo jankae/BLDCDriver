@@ -161,6 +161,11 @@ void HAL::BLDC::Driver::NewPhaseVoltages(uint16_t *data) {
 				}
 			} else {
 				RotorPos = -1;
+				if (state == State::Idle_Braking) {
+					// stopped completely while idle braking, prevent the driver
+					// from switching back to powered state
+					NextState(State::Idle);
+				}
 			}
 		}
 	}
@@ -186,10 +191,11 @@ void HAL::BLDC::Driver::NewPhaseVoltages(uint16_t *data) {
 			Log::Uart(Log::Lvl::Inf, "Powering motor...");
 			IncRotorPos();
 			LowLevel::SetPWM(minPWM);
-			NextState(State::Powered_PreZero);
+			NextState(State::Starting);
 		}
 	}
 		break;
+	case State::Starting:
 	case State::Powered_PreZero:
 	{
 		constexpr uint16_t nPulsesSkip = 1;
@@ -200,10 +206,10 @@ void HAL::BLDC::Driver::NewPhaseVoltages(uint16_t *data) {
 		const uint16_t supply = data[(int) nPhaseHigh];
 
 		uint16_t skip = nPulsesSkip;
-		if(!DetectorArmed) {
+		if (state == State::Starting) {
 			// this is the first commutation from a stopped position
 			// wait a little bit longer until enabling detector
-			skip += 10;
+			skip += 2;
 		}
 
 		if (cnt == 1) {
@@ -320,6 +326,7 @@ void HAL::BLDC::Driver::NewPhaseVoltages(uint16_t *data) {
 				uint32_t Vmotor = m.voltage * ResistancePWM / 1000;
 				int32_t Imotor = m.current * 1000 / ResistancePWM;
 				uint32_t resistance_mR = (uint64_t) Vmotor * 1000 / Imotor;
+				Log::Uart(Log::Lvl::Dbg, "Resistance step %d: %lumR", step - 1, resistance_mR);
 				result += resistance_mR;
 			}
 			if (step >= 6) {
@@ -473,9 +480,9 @@ uint16_t HAL::BLDC::Driver::GetRPMSmoothed() {
 
 uint16_t HAL::BLDC::Driver::GetRPMInstant() {
 	if (IsRunning()) {
-		uint32_t PWMPeriodSum = CommutationCycles[0] + CommutationCycles[1]
+		uint32_t PWMPeriodSum = (CommutationCycles[0] + CommutationCycles[1]
 				+ CommutationCycles[2] + CommutationCycles[3]
-				+ CommutationCycles[4] + CommutationCycles[5];
+				+ CommutationCycles[4] + CommutationCycles[5]) * 2;
 		uint32_t CommutationsPerSecond = 6 * Defines::PWM_Frequency
 				/ PWMPeriodSum;
 

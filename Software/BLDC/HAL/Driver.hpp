@@ -15,6 +15,7 @@ public:
 		None,					// only used to indicate no state change in stateBuf
 		Stopped,				// all phases are actively pulled low, blocking the motor
 		Align,					// low power align prior to starting (in case inductance sensing failed)
+		Starting,
 		Powered_PreZero,		// motor is running under power, waiting for zero crossing
 		Powered_PastZero,		// motor is running under power, crossing already happened
 		Idle,					// unpowered, either stopped or running from external force/momentum
@@ -64,7 +65,7 @@ public:
 private:
 	static Driver *Inst;
 	static constexpr uint32_t minPWM = 100;
-	static constexpr uint32_t CommutationTimeoutms = 50;
+	static constexpr uint32_t CommutationTimeoutms = 100;
 	static constexpr uint8_t MotorPoles = 12;
 	void NewPhaseVoltages(uint16_t *data);
 	void SetStep(uint8_t step);
