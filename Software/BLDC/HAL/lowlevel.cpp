@@ -45,22 +45,20 @@ static void AdjustSamplingToPWM(uint16_t pwm) {
 	static bool PWMOnSampling = false;
 	if (PWMOnSampling && pwm < lowPWMThreshold) {
 		PWMOnSampling = false;
-		Log::Uart(Log::Lvl::Dbg, "Switching to off phase sampling");
 	} else if (!PWMOnSampling && pwm > highPWMThreshold) {
 		PWMOnSampling = true;
-		Log::Uart(Log::Lvl::Dbg, "Switching to on phase sampling");
 	}
 	if (PWMOnSampling) {
 		TIM1->CCR4 = PWMOnSamplingPoint;
 	} else {
-		TIM1->CCR4 = PWMOffSamplingPoint;
+		TIM1->CCR4 = PWMOnSamplingPoint;
 	}
 }
 
 void HAL::BLDC::LowLevel::Init() {
+	__HAL_DBGMCU_FREEZE_TIM1();
 	__HAL_DBGMCU_FREEZE_TIM2();
-	__HAL_DBGMCU_FREEZE_TIM6();
-	__HAL_DBGMCU_FREEZE_TIM7();
+	__HAL_DBGMCU_FREEZE_TIM15();
 
 	SetPhase(Phase::A, State::Idle);
 	SetPhase(Phase::B, State::Idle);
@@ -126,17 +124,13 @@ void HAL::BLDC::LowLevel::SetPhase(Phase p, State s) {
 
 extern "C" {
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc) {
-	if(hadc->Instance == ADC1) {
-		HAL::BLDC::Driver::DMAComplete();
-	} else if(hadc->Instance == ADC2) {
+	if(hadc->Instance == ADC2) {
 		HAL::BLDC::PowerADC::DMAComplete();
 	}
 }
 
 void HAL_ADC_ConvHalfCpltCallback(ADC_HandleTypeDef* hadc) {
-	if(hadc->Instance == ADC1) {
-		HAL::BLDC::Driver::DMAHalfComplete();
-	} else if(hadc->Instance == ADC2) {
+	if(hadc->Instance == ADC2) {
 		HAL::BLDC::PowerADC::DMAHalfComplete();
 	}
 }

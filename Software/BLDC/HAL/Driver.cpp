@@ -16,7 +16,7 @@ Driver* HAL::BLDC::Driver::Inst;
 
 extern ADC_HandleTypeDef hadc1;
 
-static constexpr int ADCBufferLength = 6;
+static constexpr int ADCBufferLength = 3;
 
 static uint16_t ADCBuf[ADCBufferLength];
 
@@ -88,7 +88,7 @@ void HAL::BLDC::Driver::NewPhaseVoltages(uint16_t *data) {
 			// DC bus voltage too high, presumably due to regenerative braking */
 			SetIdle();
 			NextState(State::Idle_Braking);
-			Log::Uart(Log::Lvl::Wrn, "Switch to idling due to high DC bus voltage");
+//			Log::Uart(Log::Lvl::Wrn, "Switch to idling due to high DC bus voltage");
 		}
 	}
 
@@ -99,7 +99,7 @@ void HAL::BLDC::Driver::NewPhaseVoltages(uint16_t *data) {
 	case State::Idle_Braking:
 		if(PowerADC::VoltageWithinLimits()) {
 			// the DC bus voltage dropped sufficiently to resume powered operation
-			Log::Uart(Log::Lvl::Inf, "Resume powered operation");
+//			Log::Uart(Log::Lvl::Inf, "Resume powered operation");
 			NextState(State::Powered_PreZero);
 			break;
 		}
@@ -135,11 +135,11 @@ void HAL::BLDC::Driver::NewPhaseVoltages(uint16_t *data) {
 			if (valid
 					&& max < idleDetectionThreshold - idleDetectionHysterese) {
 				// induced voltage too small to reliable track position, assume motor has stopped
-				Log::Uart(Log::Lvl::Dbg, "Below threshold: idle tracking inactive");
+//				Log::Uart(Log::Lvl::Dbg, "Below threshold: idle tracking inactive");
 				valid = false;
 			} else if (!valid
 					&& max > idleDetectionThreshold + idleDetectionHysterese) {
-				Log::Uart(Log::Lvl::Dbg, "Above threshold: idle tracking active");
+//				Log::Uart(Log::Lvl::Dbg, "Above threshold: idle tracking active");
 				valid = true;
 			}
 			if (valid) {
@@ -184,18 +184,21 @@ void HAL::BLDC::Driver::NewPhaseVoltages(uint16_t *data) {
 		constexpr uint32_t cntThresh = msHold * Defines::PWM_Frequency / 1000;
 		constexpr uint16_t alignPWM = minPWM / 2;
 		if (cnt == 1) {
-			Log::Uart(Log::Lvl::Inf, "Aligning motor...");
+//			Log::Uart(Log::Lvl::Inf, "Aligning motor...");
 			LowLevel::SetPWM(alignPWM);
 			SetStep(RotorPos);
 		} else if(cnt > cntThresh) {
-			Log::Uart(Log::Lvl::Inf, "Powering motor...");
-			IncRotorPos();
-			LowLevel::SetPWM(minPWM);
-			NextState(State::Starting);
+//			Log::Uart(Log::Lvl::Inf, "...motor aligned");
+			SetIdle();
+			NextState(State::Idle);
 		}
 	}
 		break;
 	case State::Starting:
+		if(GetRPMInstant() > 500) {
+			NextState(State::Powered_PreZero);
+		}
+		/* No break */
 	case State::Powered_PreZero:
 	{
 		constexpr uint16_t nPulsesSkip = 1;
@@ -205,16 +208,20 @@ void HAL::BLDC::Driver::NewPhaseVoltages(uint16_t *data) {
 
 		const uint16_t supply = data[(int) nPhaseHigh];
 
-		uint16_t skip = nPulsesSkip;
-		if (state == State::Starting) {
-			// this is the first commutation from a stopped position
-			// wait a little bit longer until enabling detector
-			skip += 2;
-		}
+//		uint16_t skip = nPulsesSkip;
+//		if (state == State::Starting) {
+//			// this is the first commutation from a stopped position
+//			// wait a little bit longer until enabling detector
+//			skip += 2;
+//		}
+
+		static uint32_t integral;
 
 		if (cnt == 1) {
 			SetStep(RotorPos);
-		} else if (cnt > skip) {
+			integral = 0;
+		}
+		if (true) {
 			if(cnt >= timeoutThresh) {
 				// failed to detect the next commutation in time, motor probably stalled
 				Log::Uart(Log::Lvl::Wrn, "Commutation timed out");
@@ -226,24 +233,47 @@ void HAL::BLDC::Driver::NewPhaseVoltages(uint16_t *data) {
 
 			const uint16_t phase = data[(int) nPhaseIdle];
 
+			const uint16_t min = supply / 10;
+			if(phase < min || phase + min > supply) {
+				break;
+			}
+
 			bool rising = (dir == Direction::Forward) ^ (RotorPos & 0x01);
-			const uint16_t zero = supply / 2;
+			const uint16_t zero = supply * mot->ZeroCal[RotorPos] / 65536;;
 			int16_t compare = phase - zero;
 
-			if (DetectorArmed) {
-				if ((compare <= 0 && !rising)
-						|| (compare >= ZeroThreshold && rising)) {
-					// crossing detected
-					timeToZero = cnt;
+			constexpr uint32_t integralLimit = 750;
+			uint32_t limit = integralLimit;
+			if (state == State::Starting) {
+				limit *= 50;
+			}
+			if(!rising) {
+				compare = -compare;
+			}
+			if(compare > 0) {
+				integral += compare;
+				if(integral >= limit) {
 					CommutationCycles[RotorPos] = cnt;
-					NextState(State::Powered_PastZero);
-				}
-			} else {
-				if ((compare <= 0 && rising)
-						|| (compare > 0 && !rising)) {
-					DetectorArmed = true;
+					IncRotorPos();
+					NextState(State::Powered_PreZero);
+					HAL_GPIO_TogglePin(TRIGGER_GPIO_Port, TRIGGER_Pin);
 				}
 			}
+
+//			if (DetectorArmed) {
+//				if ((compare <= 0 && !rising)
+//						|| (compare >= ZeroThreshold && rising)) {
+//					// crossing detected
+//					timeToZero = cnt;
+//					CommutationCycles[RotorPos] = cnt;
+//					NextState(State::Powered_PastZero);
+//				}
+//			} else {
+//				if ((compare <= 0 && rising)
+//						|| (compare > 0 && !rising)) {
+//					DetectorArmed = true;
+//				}
+//			}
 		}
 	}
 		break;
@@ -254,6 +284,32 @@ void HAL::BLDC::Driver::NewPhaseVoltages(uint16_t *data) {
 			IncRotorPos();
 			SetStep(RotorPos);
 			NextState(State::Powered_PreZero);
+			HAL_GPIO_TogglePin(TRIGGER_GPIO_Port, TRIGGER_Pin);
+		}
+	}
+		break;
+	case State::Calibrating: {
+		if (cnt == 1) {
+			HAL_GPIO_WritePin(TRIGGER_GPIO_Port, TRIGGER_Pin, GPIO_PIN_SET);
+		}
+		constexpr uint16_t periodsPerMeasurement = 5;
+		const uint8_t measurement = cnt / periodsPerMeasurement;
+		const uint8_t intCycle = cnt % periodsPerMeasurement;
+		if (intCycle == 1) {
+			SetIdle();
+			if (measurement > 0) {
+				mot->ZeroCal[measurement - 1] = data[(int) nPhaseIdle] * 65536UL
+						/ data[(int) nPhaseHigh];
+			}
+			if (measurement >= 6) {
+				HAL_GPIO_WritePin(TRIGGER_GPIO_Port, TRIGGER_Pin,
+						GPIO_PIN_RESET);
+				// calibration completed
+				NextState(State::Idle);
+			}
+		} else if (intCycle == 0) {
+			LowLevel::SetPWM(minPWM);
+			SetStep(measurement - 1);
 		}
 	}
 		break;
@@ -326,7 +382,7 @@ void HAL::BLDC::Driver::NewPhaseVoltages(uint16_t *data) {
 				uint32_t Vmotor = m.voltage * ResistancePWM / 1000;
 				int32_t Imotor = m.current * 1000 / ResistancePWM;
 				uint32_t resistance_mR = (uint64_t) Vmotor * 1000 / Imotor;
-				Log::Uart(Log::Lvl::Dbg, "Resistance step %d: %lumR", step - 1, resistance_mR);
+//				Log::Uart(Log::Lvl::Dbg, "Resistance step %d: %lumR", step - 1, resistance_mR);
 				result += resistance_mR;
 			}
 			if (step >= 6) {
@@ -342,7 +398,7 @@ void HAL::BLDC::Driver::NewPhaseVoltages(uint16_t *data) {
 	}
 }
 
-HAL::BLDC::Driver::Driver() {
+HAL::BLDC::Driver::Driver(Data *d) {
 	if(Inst) {
 		Log::Uart(Log::Lvl::Crt, "Attempted to create second driver object");
 		return;
@@ -354,11 +410,34 @@ HAL::BLDC::Driver::Driver() {
 	cnt = 0;
 	dir = Direction::Forward;
 	RotorPos = -1;
+	mot = d;
+	// check if data is plausible
+	bool plausible = true;
+	for(auto i : mot->ZeroCal) {
+		constexpr uint16_t maxDiff = 10000;
+		if(i<32768-maxDiff || i > 32768+maxDiff) {
+			plausible = false;
+			break;
+		}
+	}
+	if (!plausible) {
+		mot->ZeroCal.fill(32768);
+		Log::Uart(Log::Lvl::Wrn, "Implausible motor calibration data, resetting");
+	}
 #ifdef DRIVER_BUFFER
 	buffer.clear();
 #endif
 
 	HAL_ADC_Start_DMA(&hadc1, (uint32_t*) ADCBuf, ADCBufferLength);
+	/*
+	 * The DMA interrupt -> DMA handler -> ADC handler -> Dispatcher -> Driver state machine
+	 * flow that CubeMX generates is too slow for the driver to update the PWM values in the
+	 * same cycle. As a workaround, the state machine is directly called from the corresponding
+	 * ISR and the half complete interrupt is not needed anymore
+	 *
+	 * TODO get rid of the HAL overhead and implement the ADC + DMA directly inside the driver
+	 */
+	DMA1_Channel1->CCR &= ~DMA_CCR_HTIE;
 
 	Inst = this;
 
@@ -381,16 +460,12 @@ void HAL::BLDC::Driver::Stop() {
 	stateBuf = State::Stopped;
 }
 
-void HAL::BLDC::Driver::DMAComplete() {
-	if (Inst) {
-		Inst->NewPhaseVoltages(&ADCBuf[ADCBufferLength / 2]);
+extern "C" {
+void DriverInterrupt() {
+	if (Driver::Inst) {
+		Driver::Inst->NewPhaseVoltages(&ADCBuf[0]);
 	}
 }
-
-void HAL::BLDC::Driver::DMAHalfComplete() {
-	if (Inst) {
-		Inst->NewPhaseVoltages(&ADCBuf[0]);
-	}
 }
 
 void HAL::BLDC::Driver::InitiateStart() {
@@ -417,12 +492,14 @@ void HAL::BLDC::Driver::InitiateStart() {
 			Log::Uart(Log::Lvl::Wrn, "Unable to determine position, fall back to align and go");
 			RotorPos = 0;
 			stateBuf = State::Align;
-			return;
+			WhileStateEquals(State::Align);
+			IncRotorPos();
 		}
 	}
 	LowLevel::SetPWM(minPWM);
 	DetectorArmed = false;
-	stateBuf = State::Powered_PreZero;
+	SetStep(RotorPos);
+	stateBuf = State::Starting;
 }
 
 void HAL::BLDC::Driver::SetIdle() {
@@ -482,7 +559,7 @@ uint16_t HAL::BLDC::Driver::GetRPMInstant() {
 	if (IsRunning()) {
 		uint32_t PWMPeriodSum = (CommutationCycles[0] + CommutationCycles[1]
 				+ CommutationCycles[2] + CommutationCycles[3]
-				+ CommutationCycles[4] + CommutationCycles[5]) * 2;
+				+ CommutationCycles[4] + CommutationCycles[5]);
 		uint32_t CommutationsPerSecond = 6 * Defines::PWM_Frequency
 				/ PWMPeriodSum;
 
@@ -502,6 +579,32 @@ HAL::BLDC::Driver::MotorData HAL::BLDC::Driver::GetData() {
 	d.voltage = m.voltage;
 
 	return d;
+}
+
+void HAL::BLDC::Driver::Calibrate() {
+	if(state != State::Idle) {
+		Log::Uart(Log::Lvl::Err, "Unable to calibrate non-idling motor");
+		return;
+	}
+	uint32_t sum[6] = { 0, 0, 0, 0, 0, 0 };
+	for (uint8_t i = 0; i < 6; i++) {
+		RotorPos = i;
+		stateBuf = State::Align;
+		WhileStateEquals(State::Align);
+		stateBuf = State::Calibrating;
+		WhileStateEquals(State::Calibrating);
+		for (uint8_t j = 0; j < 6; j++) {
+			sum[j] += mot->ZeroCal[j];
+		}
+	}
+
+	// measured offsets over one electrical rotation, average
+	for (uint8_t j = 0; j < 6; j++) {
+		mot->ZeroCal[j] = sum[j] / 6;
+	}
+	Log::Uart(Log::Lvl::Dbg, "Result: %d %d %d %d %d %d", mot->ZeroCal[0],
+			mot->ZeroCal[1], mot->ZeroCal[2], mot->ZeroCal[3], mot->ZeroCal[4],
+			mot->ZeroCal[5]);
 }
 
 void HAL::BLDC::Driver::WhileStateEquals(State s) {

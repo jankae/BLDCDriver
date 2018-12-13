@@ -3,6 +3,7 @@
 #include "Logging.hpp"
 #include "Propeller.hpp"
 #include "Persistance.hpp"
+#include "Driver.hpp"
 
 #include <cstring>
 
@@ -50,6 +51,10 @@ void Core::Communication::Task(void *argument) {
 				} else if (strncmp(line, "print", 5) == 0) {
 					if (c->system->prop) {
 						c->system->prop->PrintData();
+					}
+				} else if (strncmp(line, "calib", 5) == 0) {
+					if (c->system->driver) {
+						c->system->driver->Calibrate();
 					}
 				}
 				break;

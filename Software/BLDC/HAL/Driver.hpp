@@ -8,9 +8,6 @@ namespace HAL {
 namespace BLDC {
 class Driver : public HALDriver {
 public:
-	Driver();
-	~Driver();
-
 	enum class State : uint8_t {
 		None,					// only used to indicate no state change in stateBuf
 		Stopped,				// all phases are actively pulled low, blocking the motor
@@ -22,6 +19,7 @@ public:
 		Idle_Braking,			// regenerative braking active but DC bus can't take the charge -> idling
 		Testing,				// Controller performs selftest, motor is not moving
 		MeasuringResistance,
+		Calibrating,
 	};
 
 	enum class TestResult : uint8_t {
@@ -35,6 +33,14 @@ public:
 		Reverse,
 	};
 
+	using Data = struct data {
+		std::array<uint16_t, 6> ZeroCal;
+	};
+
+	Driver(Data *d);
+	~Driver();
+
+
 	void SetPWM(int16_t promille) override;
 
 	MotorData GetData() override;
@@ -46,6 +52,8 @@ public:
 
 
 	void InitiateStart() override;
+
+	void Calibrate();
 
 	bool IsRunning();
 	bool GotValidPosition();
@@ -62,7 +70,7 @@ public:
 		dir = d;
 	}
 
-private:
+//private:
 	static Driver *Inst;
 	static constexpr uint32_t minPWM = 100;
 	static constexpr uint32_t CommutationTimeoutms = 100;
@@ -73,14 +81,16 @@ private:
 	void IncRotorPos();
 	void WhileStateEquals(State s);
 
-	State state, stateBuf;
+	volatile State state, stateBuf;
 	uint32_t cnt;
 	uint32_t timeToZero;
 	bool DetectorArmed;
 
+	Data *mot;
+
 	LowLevel::Phase nPhaseHigh, nPhaseIdle;
 
-	int8_t RotorPos;
+	volatile int8_t RotorPos;
 	Direction dir;
 
 	uint32_t commutationCnt;
@@ -90,3 +100,4 @@ private:
 };
 }
 }
+

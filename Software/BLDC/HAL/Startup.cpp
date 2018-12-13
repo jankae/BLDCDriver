@@ -18,8 +18,7 @@ using namespace HAL::BLDC;
 
 Core::Sysinfo sys;
 Core::Propeller::Data propdata __attribute__ ((section (".ccmpersist")));
-
-Driver *d;
+Driver::Data motdata __attribute__ ((section (".ccmpersist")));
 
 void Start() {
 	Persistance::Load();
@@ -32,10 +31,10 @@ void Start() {
 
 	HAL::BLDC::PowerADC::Init();
 	HAL::BLDC::LowLevel::Init();
-	d = new HAL::BLDC::Driver();
+	sys.driver = new HAL::BLDC::Driver(&motdata);
 
 	// perform low level hardware check of driver
-	switch(d->Test()) {
+	switch(sys.driver->Test()) {
 	case Driver::TestResult::OK:
 		Log::Uart(Log::Lvl::Inf, "Driver passed test");
 		break;
@@ -56,7 +55,10 @@ void Start() {
 	// inform objects of each other
 	sys.communication->SetSystemInfo(&sys);
 
-	Test::MotorCharacterisation();
+//	sys.driver->Calibrate();
+//	Persistance::Store();
+	Test::MotorFunctions();
+//	Test::MotorCharacterisation();
 //	Test::WindEstimation();
 
 	// Startup completed, this task is no longer needed

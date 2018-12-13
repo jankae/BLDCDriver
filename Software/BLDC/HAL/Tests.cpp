@@ -26,136 +26,21 @@ void Test::DifferentPWMs(void) {
 }
 
 void Test::MotorFunctions(void) {
-	auto Start = [](Driver *d) -> bool {
-		constexpr uint8_t attempts = 10;
-		uint8_t attempt_cnt = 0;
-		while(!d->IsRunning()) {
-			attempt_cnt++;
-			if(attempt_cnt > attempts) {
-				Log::Uart(Log::Lvl::Err, "Unable to start motor");
-				return false;
-			}
-			Log::Uart(Log::Lvl::Dbg, "Starting motor: attempt %d", attempt_cnt);
-			d->InitiateStart();
-			vTaskDelay(1000);
-		}
-		return true;
-	};
-
-	switch(d->Test()) {
-	case Driver::TestResult::Failure:
-		Log::Uart(Log::Lvl::Crt, "Driver reports hardware failure");
-		return;
-	case Driver::TestResult::NoMotor:
-		Log::Uart(Log::Lvl::Err, "Driver reports no motor");
-		return;
-	}
-	Log::Uart(Log::Lvl::Inf, "Driver test passed");
-
-	{
-		/* Motor start test */
-		while(1) {
-			vTaskDelay(500);
-			d->InitiateStart();
-			vTaskDelay(1500);
-			auto m = PowerADC::GetSmoothed();
-			uint16_t pwm;
-			uint16_t rpm = d->GetRPMSmoothed();
-//			for(pwm = 100;pwm<1000;pwm++) {
-//				d->SetPWM(pwm);
-//				vTaskDelay(10);
-//				m = PowerADC::GetSmoothed();
-//				rpm = d->GetRPMSmoothed();
-////				if(pwm % 10 == 0) {
-//					Log::Uart(Log::Lvl::Inf, "PWM: %d, V: %lu I: %lu, RPM: %d", pwm,
-//							m.voltage, m.current, rpm);
-////				}
-//				if(m.current >= 15000) {
-//					break;
-//				}
-//			}
-			d->FreeRunning();
-			vTaskDelay(1000);
-			d->Stop();
-		}
-	}
-
-	{
-		/* Speed change Test */
-		constexpr uint16_t maxTestPWM = 500;
-		constexpr uint16_t minTestPWM = 50;
-		constexpr uint16_t minPWMStep = 30;
-		constexpr uint16_t maxPWMStep = 450;
-		constexpr uint16_t stepIncr = 30;
-
-//		HAL_GPIO_WritePin(TRIGGER_GPIO_Port, TRIGGER_Pin, GPIO_PIN_RESET);
-		if(!Start(d)) {
-			return;
-		}
-
+	while (1) {
+		sys.driver->InitiateStart();
 		vTaskDelay(1000);
-		d->SetPWM(300);
-		vTaskDelay(500);
-//		HAL_GPIO_WritePin(TRIGGER_GPIO_Port, TRIGGER_Pin, GPIO_PIN_SET);
-		d->SetPWM(100);
-		vTaskDelay(5000);
-//		d.FreeRunning();
-
-//		for (uint16_t i = minPWMStep; i <= maxPWMStep; i += stepIncr) {
-//			Log::Uart(Log::Lvl::Dbg, "Speed change, step: %d", i);
-//			int16_t j;
-//			for (j = minTestPWM; j <= maxTestPWM; j += i) {
-//				Log::Uart(Log::Lvl::Dbg, "PWM: %d", j);
-//				d.SetPWM(j);
-//				vTaskDelay(300);
-//				if (!d.IsRunning()) {
-//					d.FreeRunning();
-//					Log::Uart(Log::Lvl::Wrn,
-//							"Failed speed change test: PWM: %d, step: %d",
-//							j, i);
-//					return;
-//				}
-//			}
-//			j -= i;
-//			for (;j >= minTestPWM; j -= i) {
-//				Log::Uart(Log::Lvl::Dbg, "PWM: %d", j);
-//				d.SetPWM(j);
-//				vTaskDelay(300);
-//				if (!d.IsRunning()) {
-//					d.FreeRunning();
-//					Log::Uart(Log::Lvl::Wrn,
-//							"Failed speed change test: PWM: %d, step: -%d",
-//							j, i);
-//					return;
-//				}
-//			}
-//		}
-//		d.FreeRunning();
-//
-//		Log::Uart(Log::Lvl::Inf, "Speed change test passed");
-
+		constexpr uint16_t maxPWM = 1000;
+		for (uint16_t pwm = 100; pwm <= maxPWM; pwm++) {
+			sys.driver->SetPWM(pwm);
+			vTaskDelay(10);
+		}
+		for (uint16_t pwm = maxPWM; pwm > 100; pwm--) {
+			sys.driver->SetPWM(pwm);
+			vTaskDelay(10);
+		}
+		sys.driver->FreeRunning();
+		vTaskDelay(2000);
 	}
-
-//	while (1) {
-//		d.SetDirection(Driver::Direction::Forward);
-//		d.InitiateStart();
-//		vTaskDelay(2000);
-//		for (uint16_t i = 100; i < 500; i++) {
-//			d.SetPWM(i);
-//			vTaskDelay(10);
-//		}
-//		for (uint16_t i = 500; i > 50; i--) {
-//			d.SetPWM(i);
-//			vTaskDelay(10);
-//		}
-////		d.FreeRunning();
-//		vTaskDelay(1000);
-//		d.SetDirection(Driver::Direction::Reverse);
-////		d.InitiateStart();
-//		vTaskDelay(2000);
-//		d.Stop();
-//		vTaskDelay(3000);
-//	}
 }
 
 static void SetStep(uint8_t step) {
@@ -194,7 +79,7 @@ static void SetStep(uint8_t step) {
 }
 
 void Test::InductanceSense() {
-	delete d;
+	delete sys.driver;
 	while (1) {
 		uint16_t pos = InductanceSensing::RotorPosition();
 		Log::Uart(Log::Lvl::Inf, "Pos: %d", pos);
@@ -211,16 +96,15 @@ void Test::InductanceSense() {
 }
 
 void Test::MotorManualStart(void) {
-	Driver d;
 	while (1) {
 		Log::Uart(Log::Lvl::Inf, "Waiting for external start");
-		while(!d.GotValidPosition()) {
+		while(!d->GotValidPosition()) {
 			vTaskDelay(10);
 		}
-		d.InitiateStart();
+		d->InitiateStart();
 		vTaskDelay(2000);
-		d.FreeRunning();
-		while(d.GotValidPosition()) {
+		d->FreeRunning();
+		while(d->GotValidPosition()) {
 			vTaskDelay(10);
 		}
 		vTaskDelay(500);
@@ -228,8 +112,7 @@ void Test::MotorManualStart(void) {
 }
 
 void Test::PowerADC() {
-	Driver d;
-	d.InitiateStart();
+	d->InitiateStart();
 	while(1) {
 		auto m = HAL::BLDC::PowerADC::GetSmoothed();
 		Log::Uart(Log::Lvl::Inf, "U: %lu, I: %ld", m.voltage, m.current);
