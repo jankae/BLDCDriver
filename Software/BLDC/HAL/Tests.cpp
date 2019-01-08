@@ -28,8 +28,8 @@ void Test::DifferentPWMs(void) {
 void Test::MotorFunctions(void) {
 	while (1) {
 		sys.driver->InitiateStart();
-		vTaskDelay(1000);
-		constexpr uint16_t maxPWM = 1000;
+		vTaskDelay(3000);
+		constexpr uint16_t maxPWM = 200;
 		for (uint16_t pwm = 100; pwm <= maxPWM; pwm++) {
 			sys.driver->SetPWM(pwm);
 			vTaskDelay(10);

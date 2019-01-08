@@ -177,6 +177,7 @@ void HAL::BLDC::Driver::NewPhaseVoltages(uint16_t *data) {
 		LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::ConstLow);
 		RotorPos = -1;
 		break;
+	case State::AlignAndGo:
 	case State::Align:
 	{
 		// align the rotor to a known position prior to starting the motor
@@ -184,21 +185,27 @@ void HAL::BLDC::Driver::NewPhaseVoltages(uint16_t *data) {
 		constexpr uint32_t cntThresh = msHold * Defines::PWM_Frequency / 1000;
 		constexpr uint16_t alignPWM = minPWM / 2;
 		if (cnt == 1) {
-//			Log::Uart(Log::Lvl::Inf, "Aligning motor...");
+			Log::Uart(Log::Lvl::Inf, "Aligning motor...");
 			LowLevel::SetPWM(alignPWM);
 			SetStep(RotorPos);
 		} else if(cnt > cntThresh) {
-//			Log::Uart(Log::Lvl::Inf, "...motor aligned");
-			SetIdle();
-			NextState(State::Idle);
+			Log::Uart(Log::Lvl::Inf, "...motor aligned");
+			if (state == State::AlignAndGo) {
+				IncRotorPos();
+				LowLevel::SetPWM(minPWM);
+				SetStep(RotorPos);
+				NextState(State::Starting);
+			} else {
+				SetIdle();
+				NextState(State::Idle);
+			}
 		}
 	}
 		break;
 	case State::Starting:
-		if(GetRPMInstant() > 500) {
-			NextState(State::Powered_PreZero);
-		}
-		/* No break */
+		SetStep(RotorPos);
+		NextState(State::Powered_PreZero);
+		break;
 	case State::Powered_PreZero:
 	{
 		constexpr uint16_t nPulsesSkip = 1;
@@ -255,6 +262,21 @@ void HAL::BLDC::Driver::NewPhaseVoltages(uint16_t *data) {
 				if(integral >= limit) {
 					CommutationCycles[RotorPos] = cnt;
 					IncRotorPos();
+					SetStep(RotorPos);
+					if(cnt <= 2) {
+						// check other commutation cycles cnt to detect backfiring motor
+						uint16_t sum = 0;
+						for(auto i : CommutationCycles) {
+							sum += i;
+						}
+						Log::Uart(Log::Lvl::Wrn, "Sum %d", sum);
+						if (sum > 6 * cnt * 100) {
+							Log::Uart(Log::Lvl::Wrn,
+									"Detected backfiring motor, aligning");
+							NextState(State::AlignAndGo);
+							break;
+						}
+					}
 					NextState(State::Powered_PreZero);
 					HAL_GPIO_TogglePin(TRIGGER_GPIO_Port, TRIGGER_Pin);
 				}

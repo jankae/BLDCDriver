@@ -12,6 +12,7 @@ public:
 		None,					// only used to indicate no state change in stateBuf
 		Stopped,				// all phases are actively pulled low, blocking the motor
 		Align,					// low power align prior to starting (in case inductance sensing failed)
+		AlignAndGo,
 		Starting,
 		Powered_PreZero,		// motor is running under power, waiting for zero crossing
 		Powered_PastZero,		// motor is running under power, crossing already happened
