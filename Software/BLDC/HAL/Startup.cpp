@@ -1,4 +1,4 @@
-#include "Startup.hpp"
+#include "Startup.h"
 
 #include "Logging.hpp"
 #include "lowlevel.hpp"
@@ -11,6 +11,7 @@
 #include "Communication.hpp"
 #include "Driver.hpp"
 #include "Propeller.hpp"
+#include "i2c_slave.hpp"
 
 #include "Tests.hpp"
 
@@ -19,6 +20,8 @@ using namespace HAL::BLDC;
 Core::Sysinfo sys;
 Core::Propeller::Data propdata __attribute__ ((section (".ccmpersist")));
 Driver::Data motdata __attribute__ ((section (".ccmpersist")));
+I2CSlave *i2cSlave;
+uint8_t i2cDummyData[10];
 
 void Start() {
 	Persistance::Load();
@@ -28,6 +31,11 @@ void Start() {
 
 	vTaskDelay(10);
 	Log::Uart(Log::Lvl::Inf, "Start");
+
+	i2cSlave = new I2CSlave(I2C1, 0x40);
+	i2cSlave->SetReadBase(i2cDummyData, sizeof(i2cDummyData));
+	i2cSlave->SetWriteBase(i2cDummyData, sizeof(i2cDummyData));
+	Log::Uart(Log::Lvl::Dbg, "I2C slave initialized");
 
 	HAL::BLDC::PowerADC::Init();
 	HAL::BLDC::LowLevel::Init();
@@ -57,7 +65,7 @@ void Start() {
 
 //	sys.driver->Calibrate();
 //	Persistance::Store();
-	Test::MotorFunctions();
+//	Test::MotorFunctions();
 //	Test::MotorCharacterisation();
 //	Test::WindEstimation();
 
@@ -71,4 +79,8 @@ void Start() {
 //	Test::MotorFunctions();
 //	Test::MotorManualStart();
 //	Test::DifferentPWMs();
+}
+
+void I2CInterrupt() {
+	i2cSlave->EventInterrupt();
 }

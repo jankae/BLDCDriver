@@ -4,7 +4,7 @@
   * @brief   This file contains the headers of the interrupt handlers.
   ******************************************************************************
   *
-  * COPYRIGHT(c) 2018 STMicroelectronics
+  * COPYRIGHT(c) 2019 STMicroelectronics
   *
   * Redistribution and use in source and binary forms, with or without modification,
   * are permitted provided that the following conditions are met:
@@ -56,8 +56,11 @@ void DebugMon_Handler(void);
 void SysTick_Handler(void);
 void DMA1_Channel1_IRQHandler(void);
 void DMA1_Channel2_IRQHandler(void);
+void DMA1_Channel3_IRQHandler(void);
+void DMA1_Channel4_IRQHandler(void);
 void ADC1_2_IRQHandler(void);
 void TIM1_TRG_COM_TIM17_IRQHandler(void);
+void I2C1_EV_IRQHandler(void);
 void TIM6_DAC1_IRQHandler(void);
 
 #ifdef __cplusplus

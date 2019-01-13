@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Project>
-<ProjectName>/home/jan/Projekte/SimuCopter/BLDC/Software/BLDC/\BLDC</ProjectName>
+<ProjectName>/home/jan/Projekte/BLDCDriver/Software/BLDC/\BLDC</ProjectName>
 <CMSIS>Drivers/CMSIS</CMSIS>
 <HAL_Driver>/home/jan/STM32Cube/Repository//STM32Cube_FW_F3_V1.9.1/Drivers/CMSIS</HAL_Driver>
 
@@ -82,22 +82,22 @@
                                                     <name>Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F/port.c</name>
                                             </file>
                                             <file>
+                                                    <name>Middlewares/Third_Party/FreeRTOS/Source/event_groups.c</name>
+                                            </file>
+                                            <file>
                                                     <name>Middlewares/Third_Party/FreeRTOS/Source/timers.c</name>
                                             </file>
                                             <file>
                                                     <name>Middlewares/Third_Party/FreeRTOS/Source/queue.c</name>
                                             </file>
                                             <file>
-                                                    <name>Middlewares/Third_Party/FreeRTOS/Source/event_groups.c</name>
-                                            </file>
-                                            <file>
-                                                    <name>Middlewares/Third_Party/FreeRTOS/Source/tasks.c</name>
+                                                    <name>Middlewares/Third_Party/FreeRTOS/Source/list.c</name>
                                             </file>
                                             <file>
                                                     <name>Middlewares/Third_Party/FreeRTOS/Source/croutine.c</name>
                                             </file>
                                             <file>
-                                                    <name>Middlewares/Third_Party/FreeRTOS/Source/list.c</name>
+                                                    <name>Middlewares/Third_Party/FreeRTOS/Source/tasks.c</name>
                                             </file>
                                             <file>
                                                     <name>Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS/cmsis_os.c</name>
