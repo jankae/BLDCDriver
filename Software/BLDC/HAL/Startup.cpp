@@ -35,6 +35,9 @@ void Start() {
 	i2cSlave = new I2CSlave(I2C1, 0x40);
 	i2cSlave->SetReadBase(i2cDummyData, sizeof(i2cDummyData));
 	i2cSlave->SetWriteBase(i2cDummyData, sizeof(i2cDummyData));
+	i2cSlave->SetCallback([](void *){
+		Log::Uart(Log::Lvl::Dbg, "I2C Callback");
+	}, nullptr);
 	Log::Uart(Log::Lvl::Dbg, "I2C slave initialized");
 
 	HAL::BLDC::PowerADC::Init();
