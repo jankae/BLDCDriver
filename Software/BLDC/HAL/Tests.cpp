@@ -38,7 +38,7 @@ void Test::MotorFunctions(void) {
 			sys.driver->SetPWM(pwm);
 			vTaskDelay(10);
 		}
-		sys.driver->FreeRunning();
+		sys.driver->Stop();
 		vTaskDelay(2000);
 	}
 }

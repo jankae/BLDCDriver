@@ -12,6 +12,8 @@
 #include "Driver.hpp"
 #include "Propeller.hpp"
 #include "i2c_slave.hpp"
+#include "Motor.hpp"
+#include "cast.hpp"
 
 #include "Tests.hpp"
 
@@ -31,14 +33,6 @@ void Start() {
 
 	vTaskDelay(10);
 	Log::Uart(Log::Lvl::Inf, "Start");
-
-	i2cSlave = new I2CSlave(I2C1, 0x40);
-	i2cSlave->SetReadBase(i2cDummyData, sizeof(i2cDummyData));
-	i2cSlave->SetWriteBase(i2cDummyData, sizeof(i2cDummyData));
-	i2cSlave->SetCallback([](void *){
-		Log::Uart(Log::Lvl::Dbg, "I2C Callback");
-	}, nullptr);
-	Log::Uart(Log::Lvl::Dbg, "I2C slave initialized");
 
 	HAL::BLDC::PowerADC::Init();
 	HAL::BLDC::LowLevel::Init();
@@ -65,6 +59,17 @@ void Start() {
 
 	// inform objects of each other
 	sys.communication->SetSystemInfo(&sys);
+
+	Log::Uart(Log::Lvl::Inf, "Starting motor controller");
+	auto mot = new Core::Motor(sys);
+
+	i2cSlave = new I2CSlave(I2C1, 0x40);
+	i2cSlave->SetReadBase(&mot->outState, sizeof(Core::Motor::OutState));
+	i2cSlave->SetWriteBase(&mot->inState, sizeof(Core::Motor::InState));
+	i2cSlave->SetCallback(
+			pmf_cast<void (*)(void*), Core::Motor, &Core::Motor::NewData>::cfn,
+			mot);
+	Log::Uart(Log::Lvl::Inf, "I2C slave initialized");
 
 //	sys.driver->Calibrate();
 //	Persistance::Store();

@@ -4,7 +4,6 @@
 #include "FreeRTOS.h"
 #include "task.h"
 #include "queue.h"
-#include "semphr.h"
 #include "Sysinfo.hpp"
 
 #include <cstdint>
@@ -20,38 +19,30 @@ public:
 
 	enum class ControlMode : uint8_t {
 			Off,
+			Promille,
 			RPM,
 			Thrust,
 	};
 
-	using Setpoint = struct {
+	using InState = struct {
+		int32_t value;
 		ControlMode mode;
-		uint32_t value;
-	};
+	} __attribute__ ((packed));
 
-	using Measurement = struct {
-		uint32_t Thrust;
-		uint32_t Torque;
-		uint32_t RPM;
-		uint32_t Voltage;
-		uint32_t Current;
-	};
+	using OutState = struct {
+		int32_t Current;
+		int32_t Voltage;
+		int32_t RPM;
+		int32_t Thrust;
+		int32_t Torque;
+	} __attribute__ ((packed));
 
-	Motor(HAL &h);
+	Motor(Sysinfo &s);
 	~Motor();
 
-	void SetSystemInfo(Sysinfo *s);
-
-	/*
-	 * Functions called by the interface to the main copter control.
-	 * Set desired motor variables and read the status back
-	 */
-	void Set(Setpoint setpoint);
-
-	Measurement GetMeasurement() {
-		return outState;
-	}
-
+	void NewData();
+	OutState outState;
+	InState inState;
 private:
 	static constexpr uint32_t ControllerStack = 200;
 	static constexpr uint8_t ControllerPriority = FreeRTOSPrioRealtime;
@@ -59,19 +50,10 @@ private:
 
 	void ControlTask();
 
+	portTickType lastExecutionTime;
+
 	xTaskHandle ControlHandle;
-	HAL *hal;
-
-
-	OutState outState;
-	InState inState;
-
-	uint32_t Pgain;
-
-	portTickType lastStateTransition;
-	portTickType lastControllerIteration;
-
-	Sysinfo *system;
+	Sysinfo *sys;
 };
 }
 

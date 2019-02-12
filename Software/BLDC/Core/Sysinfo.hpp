@@ -2,7 +2,7 @@
 
 namespace HAL {
 namespace BLDC {
-class Driver;
+class HALDriver;
 }
 }
 
@@ -14,7 +14,7 @@ class Propeller;
 using Sysinfo = struct sysinfo {
 	Propeller *prop;
 	Communication *communication;
-	HAL::BLDC::Driver *driver;
+	HAL::BLDC::HALDriver *driver;
 };
 
 }

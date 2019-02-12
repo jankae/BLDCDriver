@@ -54,7 +54,7 @@ void Core::Communication::Task(void *argument) {
 					}
 				} else if (strncmp(line, "calib", 5) == 0) {
 					if (c->system->driver) {
-						c->system->driver->Calibrate();
+//						c->system->driver->Calibrate();
 					}
 				}
 				break;

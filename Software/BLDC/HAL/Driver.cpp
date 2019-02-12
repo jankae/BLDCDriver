@@ -67,7 +67,7 @@ void HAL::BLDC::Driver::SetStep(uint8_t step) {
 	}
 }
 
-#define NextState(s) do { state = s; cnt = 0;} while(0);
+#define NextState(s) do { IntState = s; cnt = 0;} while(0);
 
 //#define DRIVER_BUFFER
 #ifdef DRIVER_BUFFER
@@ -75,19 +75,19 @@ Fifo<uint16_t, 1500> buffer __attribute__ ((section (".ccmram")));
 #endif
 
 void HAL::BLDC::Driver::NewPhaseVoltages(uint16_t *data) {
-	if (stateBuf != State::None) {
-		if (state != stateBuf) {
+	if (stateBuf != InternalState::None) {
+		if (IntState != stateBuf) {
 			// state was changed by driver funtion call
 			NextState(stateBuf);
-			stateBuf = State::None;
+			stateBuf = InternalState::None;
 		}
 	}
 
-	if (state == State::Powered_PastZero || state == State::Powered_PreZero) {
+	if (IntState == InternalState::Powered_PastZero || IntState == InternalState::Powered_PreZero) {
 		if (!PowerADC::VoltageWithinLimits()) {
 			// DC bus voltage too high, presumably due to regenerative braking */
 			SetIdle();
-			NextState(State::Idle_Braking);
+			NextState(InternalState::Idle_Braking);
 //			Log::Uart(Log::Lvl::Wrn, "Switch to idling due to high DC bus voltage");
 		}
 	}
@@ -95,16 +95,16 @@ void HAL::BLDC::Driver::NewPhaseVoltages(uint16_t *data) {
 	PWMperiodCnt++;
 	cnt++;
 
-	switch(state) {
-	case State::Idle_Braking:
+	switch(IntState) {
+	case InternalState::Idle_Braking:
 		if(PowerADC::VoltageWithinLimits()) {
 			// the DC bus voltage dropped sufficiently to resume powered operation
 //			Log::Uart(Log::Lvl::Inf, "Resume powered operation");
-			NextState(State::Powered_PreZero);
+			NextState(InternalState::Powered_PreZero);
 			break;
 		}
 		/* no break */
-	case State::Idle:
+	case InternalState::Idle:
 	{
 		// do not apply any voltages to the phase terminals
 		SetIdle();
@@ -161,24 +161,26 @@ void HAL::BLDC::Driver::NewPhaseVoltages(uint16_t *data) {
 				}
 			} else {
 				RotorPos = -1;
-				if (state == State::Idle_Braking) {
+				state = State::Stopped;
+				if (IntState == InternalState::Idle_Braking) {
 					// stopped completely while idle braking, prevent the driver
 					// from switching back to powered state
-					NextState(State::Idle);
+					NextState(InternalState::Idle);
 				}
 			}
 		}
 	}
 		break;
-	case State::Stopped:
+	case InternalState::Stopped:
 		// keep the motor stopped by pulling all phases to ground
 		LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::ConstLow);
 		LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::ConstLow);
 		LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::ConstLow);
 		RotorPos = -1;
+		state = State::Stopped;
 		break;
-	case State::AlignAndGo:
-	case State::Align:
+	case InternalState::AlignAndGo:
+	case InternalState::Align:
 	{
 		// align the rotor to a known position prior to starting the motor
 		constexpr uint32_t msHold = 1000;
@@ -190,24 +192,28 @@ void HAL::BLDC::Driver::NewPhaseVoltages(uint16_t *data) {
 			SetStep(RotorPos);
 		} else if(cnt > cntThresh) {
 			Log::Uart(Log::Lvl::Inf, "...motor aligned");
-			if (state == State::AlignAndGo) {
+			if (IntState == InternalState::AlignAndGo) {
 				IncRotorPos();
 				LowLevel::SetPWM(minPWM);
 				SetStep(RotorPos);
-				NextState(State::Starting);
+				NextState(InternalState::Starting);
 			} else {
 				SetIdle();
-				NextState(State::Idle);
+				NextState(InternalState::Idle);
 			}
 		}
 	}
 		break;
-	case State::Starting:
+	case InternalState::Starting:
 		SetStep(RotorPos);
-		NextState(State::Powered_PreZero);
+		NextState(InternalState::Powered_PreZero);
 		break;
-	case State::Powered_PreZero:
+	case InternalState::Powered_PreZero:
 	{
+		if (state == State::Starting
+				&& HAL_GetTick() - lastStoppedTime > startTime) {
+			state = State::Running;
+		}
 		constexpr uint16_t nPulsesSkip = 1;
 		constexpr uint16_t ZeroThreshold = 10;
 		constexpr uint32_t timeoutThresh = CommutationTimeoutms
@@ -235,7 +241,7 @@ void HAL::BLDC::Driver::NewPhaseVoltages(uint16_t *data) {
 				IncRotorPos();
 				IncRotorPos();
 				DetectorArmed = false;
-				NextState(State::Powered_PreZero);
+				NextState(InternalState::Powered_PreZero);
 			}
 
 			const uint16_t phase = data[(int) nPhaseIdle];
@@ -251,7 +257,7 @@ void HAL::BLDC::Driver::NewPhaseVoltages(uint16_t *data) {
 
 			constexpr uint32_t integralLimit = 750;
 			uint32_t limit = integralLimit;
-			if (state == State::Starting) {
+			if (IntState == InternalState::Starting) {
 				limit *= 50;
 			}
 			if(!rising) {
@@ -273,11 +279,13 @@ void HAL::BLDC::Driver::NewPhaseVoltages(uint16_t *data) {
 						if (sum > 6 * cnt * 100) {
 							Log::Uart(Log::Lvl::Wrn,
 									"Detected backfiring motor, aligning");
-							NextState(State::AlignAndGo);
+							lastStoppedTime = HAL_GetTick();
+							state = State::Starting;
+							NextState(InternalState::AlignAndGo);
 							break;
 						}
 					}
-					NextState(State::Powered_PreZero);
+					NextState(InternalState::Powered_PreZero);
 					HAL_GPIO_TogglePin(TRIGGER_GPIO_Port, TRIGGER_Pin);
 				}
 			}
@@ -299,18 +307,18 @@ void HAL::BLDC::Driver::NewPhaseVoltages(uint16_t *data) {
 		}
 	}
 		break;
-	case State::Powered_PastZero:
+	case InternalState::Powered_PastZero:
 	{
 		if(cnt >= timeToZero) {
 			// next commutation is due
 			IncRotorPos();
 			SetStep(RotorPos);
-			NextState(State::Powered_PreZero);
+			NextState(InternalState::Powered_PreZero);
 			HAL_GPIO_TogglePin(TRIGGER_GPIO_Port, TRIGGER_Pin);
 		}
 	}
 		break;
-	case State::Calibrating: {
+	case InternalState::Calibrating: {
 		if (cnt == 1) {
 			HAL_GPIO_WritePin(TRIGGER_GPIO_Port, TRIGGER_Pin, GPIO_PIN_SET);
 		}
@@ -327,7 +335,7 @@ void HAL::BLDC::Driver::NewPhaseVoltages(uint16_t *data) {
 				HAL_GPIO_WritePin(TRIGGER_GPIO_Port, TRIGGER_Pin,
 						GPIO_PIN_RESET);
 				// calibration completed
-				NextState(State::Idle);
+				NextState(InternalState::Idle);
 			}
 		} else if (intCycle == 0) {
 			LowLevel::SetPWM(minPWM);
@@ -335,7 +343,7 @@ void HAL::BLDC::Driver::NewPhaseVoltages(uint16_t *data) {
 		}
 	}
 		break;
-	case State::Testing: {
+	case InternalState::Testing: {
 		constexpr uint16_t minHighVoltage = 2000;
 		/* Set output driver according to test step and check measured phases from previous step */
 		switch(cnt) {
@@ -375,12 +383,12 @@ void HAL::BLDC::Driver::NewPhaseVoltages(uint16_t *data) {
 					result = (int) TestResult::NoMotor;
 				}
 			}
-			NextState(State::Idle);
+			NextState(InternalState::Idle);
 			break;
 		}
 	}
 		break;
-	case State::MeasuringResistance: {
+	case InternalState::MeasuringResistance: {
 		// apply low pwm values to all the phases, measure current after RL step response
 		constexpr uint32_t EstimatedTimeConstant_us = 1000;
 		// after 6 time constants the current has reached 99.7% of its final value, that is close enough
@@ -410,7 +418,7 @@ void HAL::BLDC::Driver::NewPhaseVoltages(uint16_t *data) {
 			if (step >= 6) {
 				// measured all phases
 				result /= 6;
-				NextState(State::Idle);
+				NextState(InternalState::Idle);
 			}
 		}
 	}
@@ -427,8 +435,9 @@ HAL::BLDC::Driver::Driver(Data *d) {
 	}
 	SetIdle();
 
-	state = State::Idle;
-	stateBuf = State::None;
+	IntState = InternalState::Idle;
+	stateBuf = InternalState::None;
+	state = State::Stopped;
 	cnt = 0;
 	dir = Direction::Forward;
 	RotorPos = -1;
@@ -470,16 +479,12 @@ void HAL::BLDC::Driver::SetPWM(int16_t promille) {
 	LowLevel::SetPWM(promille);
 }
 
-Driver::State HAL::BLDC::Driver::GetState() {
-	return state;
-}
-
 void HAL::BLDC::Driver::FreeRunning() {
-	stateBuf = State::Idle;
+	stateBuf = InternalState::Idle;
 }
 
-void HAL::BLDC::Driver::Stop() {
-	stateBuf = State::Stopped;
+void HAL::BLDC::Driver::BreakStop() {
+	stateBuf = InternalState::Stopped;
 }
 
 extern "C" {
@@ -495,7 +500,7 @@ void HAL::BLDC::Driver::InitiateStart() {
 		// nothing to do, motor already running
 		return;
 	}
-	stateBuf = State::Idle;
+	stateBuf = InternalState::Idle;
 	if (RotorPos == -1) {
 		Log::Uart(Log::Lvl::Dbg, "Starting motor from unknown position: initial position detection");
 		// rotor position not known at the moment, detect using inductance sensing
@@ -513,15 +518,22 @@ void HAL::BLDC::Driver::InitiateStart() {
 			// unable to determine rotor position, use align and go
 			Log::Uart(Log::Lvl::Wrn, "Unable to determine position, fall back to align and go");
 			RotorPos = 0;
-			stateBuf = State::Align;
-			WhileStateEquals(State::Align);
+			stateBuf = InternalState::Align;
+			WhileStateEquals(InternalState::Align);
 			IncRotorPos();
 		}
 	}
 	LowLevel::SetPWM(minPWM);
 	DetectorArmed = false;
 	SetStep(RotorPos);
-	stateBuf = State::Starting;
+	stateBuf = InternalState::Starting;
+	lastStoppedTime = HAL_GetTick();
+	state = State::Starting;
+}
+
+void HAL::BLDC::Driver::Stop() {
+	state = State::Stopping;
+	FreeRunning();
 }
 
 void HAL::BLDC::Driver::SetIdle() {
@@ -537,8 +549,8 @@ HAL::BLDC::Driver::~Driver() {
 }
 
 Driver::TestResult HAL::BLDC::Driver::Test() {
-	stateBuf = State::Testing;
-	WhileStateEquals(State::Testing);
+	stateBuf = InternalState::Testing;
+	WhileStateEquals(InternalState::Testing);
 	return (TestResult) result;
 }
 
@@ -547,9 +559,9 @@ bool HAL::BLDC::Driver::GotValidPosition() {
 }
 
 uint32_t HAL::BLDC::Driver::WindingResistance() {
-	stateBuf = State::MeasuringResistance;
+	stateBuf = InternalState::MeasuringResistance;
 	result = 0;
-	WhileStateEquals(State::MeasuringResistance);
+	WhileStateEquals(InternalState::MeasuringResistance);
 	return result;
 }
 
@@ -563,8 +575,8 @@ void HAL::BLDC::Driver::IncRotorPos() {
 }
 
 bool HAL::BLDC::Driver::IsRunning() {
-	return (*(volatile State*) &state == State::Powered_PastZero
-			|| *(volatile State*) &state == State::Powered_PreZero);
+	return (*(volatile InternalState*) &IntState == InternalState::Powered_PastZero
+			|| *(volatile InternalState*) &IntState == InternalState::Powered_PreZero);
 }
 
 uint16_t HAL::BLDC::Driver::GetRPMSmoothed() {
@@ -604,17 +616,17 @@ HAL::BLDC::Driver::MotorData HAL::BLDC::Driver::GetData() {
 }
 
 void HAL::BLDC::Driver::Calibrate() {
-	if(state != State::Idle) {
+	if(IntState != InternalState::Idle) {
 		Log::Uart(Log::Lvl::Err, "Unable to calibrate non-idling motor");
 		return;
 	}
 	uint32_t sum[6] = { 0, 0, 0, 0, 0, 0 };
 	for (uint8_t i = 0; i < 6; i++) {
 		RotorPos = i;
-		stateBuf = State::Align;
-		WhileStateEquals(State::Align);
-		stateBuf = State::Calibrating;
-		WhileStateEquals(State::Calibrating);
+		stateBuf = InternalState::Align;
+		WhileStateEquals(InternalState::Align);
+		stateBuf = InternalState::Calibrating;
+		WhileStateEquals(InternalState::Calibrating);
 		for (uint8_t j = 0; j < 6; j++) {
 			sum[j] += mot->ZeroCal[j];
 		}
@@ -629,7 +641,7 @@ void HAL::BLDC::Driver::Calibrate() {
 			mot->ZeroCal[5]);
 }
 
-void HAL::BLDC::Driver::WhileStateEquals(State s) {
-	while (*(volatile State*) &stateBuf == s || *(volatile State*) &state == s)
+void HAL::BLDC::Driver::WhileStateEquals(InternalState s) {
+	while (*(volatile InternalState*) &stateBuf == s || *(volatile InternalState*) &IntState == s)
 		;
 }
