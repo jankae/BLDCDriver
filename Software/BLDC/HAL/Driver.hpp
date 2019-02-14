@@ -81,7 +81,6 @@ public:
 	volatile InternalState IntState, stateBuf;
 	uint32_t cnt;
 	uint32_t timeToZero;
-	bool DetectorArmed;
 
 	Data *mot;
 

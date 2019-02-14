@@ -179,7 +179,7 @@ static void MeasurePhaseCurrents(uint16_t *adcSamples) {
 	ReconfigureHardware(buf);
 }
 
-uint16_t HAL::BLDC::InductanceSensing::RotorPosition() {
+int8_t HAL::BLDC::InductanceSensing::RotorPosition() {
 	uint16_t I[12];
 	MeasurePhaseCurrents(I);
 
@@ -188,20 +188,20 @@ uint16_t HAL::BLDC::InductanceSensing::RotorPosition() {
 	bool III_IV = I[6] < I[4];
 	bool V_VI = I[8] < I[10];
 
-	uint8_t section = 0;
+	int8_t section = -1;
 
 	if(I_II && !III_IV && !V_VI) {
-		section = 1;
+		section = 0;
 	} else if(I_II && III_IV && !V_VI) {
-		section = 2;
+		section = 1;
 	} else if(I_II && III_IV && V_VI) {
-		section = 3;
+		section = 2;
 	} else if(!I_II && III_IV && V_VI) {
-		section = 4;
+		section = 3;
 	} else if(!I_II && !III_IV && V_VI) {
-		section = 5;
+		section = 4;
 	} else if(!I_II && !III_IV && !V_VI) {
-		section = 6;
+		section = 5;
 	} else {
 		Log::Uart(Log::Lvl::Err, "Inductance sensing failed: %d %d %d %d %d %d",
 				I[0], I[2], I[4], I[6], I[8], I[10]);

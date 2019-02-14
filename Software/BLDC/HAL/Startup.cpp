@@ -36,7 +36,8 @@ void Start() {
 
 	HAL::BLDC::PowerADC::Init();
 	HAL::BLDC::LowLevel::Init();
-	sys.driver = new HAL::BLDC::Driver(&motdata);
+	auto driver = new HAL::BLDC::Driver(&motdata);
+	sys.driver = driver;
 
 	// perform low level hardware check of driver
 	switch(sys.driver->Test()) {
@@ -63,7 +64,7 @@ void Start() {
 	Log::Uart(Log::Lvl::Inf, "Starting motor controller");
 	auto mot = new Core::Motor(sys);
 
-	i2cSlave = new I2CSlave(I2C1, 0x40);
+	i2cSlave = new I2CSlave(I2C1, 0x50);
 	i2cSlave->SetReadBase(&mot->outState, sizeof(Core::Motor::OutState));
 	i2cSlave->SetWriteBase(&mot->inState, sizeof(Core::Motor::InState));
 	i2cSlave->SetCallback(
@@ -71,14 +72,11 @@ void Start() {
 			mot);
 	Log::Uart(Log::Lvl::Inf, "I2C slave initialized");
 
-//	sys.driver->Calibrate();
+//	driver->Calibrate();
 //	Persistance::Store();
 //	Test::MotorFunctions();
 //	Test::MotorCharacterisation();
 //	Test::WindEstimation();
-
-	// Startup completed, this task is no longer needed
-	vTaskDelete(nullptr);
 
 //	Test::PersistenceTest();
 //	Test::PowerADC();
@@ -87,6 +85,9 @@ void Start() {
 //	Test::MotorFunctions();
 //	Test::MotorManualStart();
 //	Test::DifferentPWMs();
+
+	// Startup completed, this task is no longer needed
+	vTaskDelete(nullptr);
 }
 
 void I2CInterrupt() {

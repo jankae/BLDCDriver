@@ -1,10 +1,12 @@
 #pragma once
 
-namespace HAL {
-namespace BLDC {
-class HALDriver;
-}
-}
+#include "BLDCHAL.hpp"
+
+//namespace HAL {
+//namespace BLDC {
+//class HALDriver;
+//}
+//}
 
 namespace Core {
 // Forward declare used classes

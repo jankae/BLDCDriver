@@ -51,14 +51,14 @@ static void SetStep(uint8_t step) {
 		LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Low);
 		break;
 	case 1:
-		LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Idle);
-		LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::High);
-		LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Low);
+		LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::High);
+		LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::Low);
+		LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Idle);
 		break;
 	case 2:
-		LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Low);
-		LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::High);
-		LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Idle);
+		LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Idle);
+		LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::Low);
+		LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::High);
 		break;
 	case 3:
 		LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Low);
@@ -66,14 +66,14 @@ static void SetStep(uint8_t step) {
 		LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::High);
 		break;
 	case 4:
-		LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Idle);
-		LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::Low);
-		LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::High);
+		LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Low);
+		LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::High);
+		LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Idle);
 		break;
 	case 5:
-		LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::High);
-		LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::Low);
-		LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Idle);
+		LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Idle);
+		LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::High);
+		LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Low);
 		break;
 	}
 }
@@ -81,12 +81,12 @@ static void SetStep(uint8_t step) {
 void Test::InductanceSense() {
 	delete sys.driver;
 	while (1) {
-		uint16_t pos = InductanceSensing::RotorPosition();
+		int8_t pos = InductanceSensing::RotorPosition();
 		Log::Uart(Log::Lvl::Inf, "Pos: %d", pos);
-		pos = (9 - pos) % 6;
+		pos = (pos + 1) % 6;
 		LowLevel::SetPWM(100);
 		SetStep(pos);
-		vTaskDelay(100);
+		vTaskDelay(1000);
 		LowLevel::SetPWM(0);
 		LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Idle);
 		LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::Idle);
@@ -127,38 +127,7 @@ void Test::ManualCommutation() {
 		step = (step + 1) % 6;
 
 		LowLevel::SetPWM(100);
-		switch (step) {
-		case 0:
-			LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::High);
-			LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::Idle);
-			LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Low);
-			break;
-		case 1:
-			LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Idle);
-			LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::High);
-			LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Low);
-			break;
-		case 2:
-			LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Low);
-			LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::High);
-			LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Idle);
-			break;
-		case 3:
-			LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Low);
-			LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::Idle);
-			LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::High);
-			break;
-		case 4:
-			LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Idle);
-			LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::Low);
-			LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::High);
-			break;
-		case 5:
-			LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::High);
-			LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::Low);
-			LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Idle);
-			break;
-		}
+		SetStep(step);
 		vTaskDelay(2000);
 	}
 	LowLevel::SetPWM(0);

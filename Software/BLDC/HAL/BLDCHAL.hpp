@@ -8,6 +8,8 @@ namespace BLDC {
 
 class HALDriver {
 public:
+	virtual ~HALDriver(){};
+
 	using IncCallback = void (*)(void* ptr, uint32_t usSinceLast);
 	using ADCCallback = void (*)(void* ptr, uint32_t voltage, uint32_t current);
 

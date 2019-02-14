@@ -30,18 +30,18 @@ void HAL::BLDC::Driver::SetStep(uint8_t step) {
 		nPhaseIdle = LowLevel::Phase::B;
 		break;
 	case 1:
-		LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Idle);
-		LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::High);
-		LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Low);
-		nPhaseHigh = LowLevel::Phase::B;
-		nPhaseIdle = LowLevel::Phase::A;
+		LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::High);
+		LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::Low);
+		LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Idle);
+		nPhaseHigh = LowLevel::Phase::A;
+		nPhaseIdle = LowLevel::Phase::C;
 		break;
 	case 2:
-		LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Low);
-		LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::High);
-		LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Idle);
-		nPhaseHigh = LowLevel::Phase::B;
-		nPhaseIdle = LowLevel::Phase::C;
+		LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Idle);
+		LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::Low);
+		LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::High);
+		nPhaseHigh = LowLevel::Phase::C;
+		nPhaseIdle = LowLevel::Phase::A;
 		break;
 	case 3:
 		LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Low);
@@ -51,18 +51,18 @@ void HAL::BLDC::Driver::SetStep(uint8_t step) {
 		nPhaseIdle = LowLevel::Phase::B;
 		break;
 	case 4:
-		LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Idle);
-		LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::Low);
-		LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::High);
-		nPhaseHigh = LowLevel::Phase::C;
-		nPhaseIdle = LowLevel::Phase::A;
+		LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Low);
+		LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::High);
+		LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Idle);
+		nPhaseHigh = LowLevel::Phase::B;
+		nPhaseIdle = LowLevel::Phase::C;
 		break;
 	case 5:
-		LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::High);
-		LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::Low);
-		LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Idle);
-		nPhaseHigh = LowLevel::Phase::A;
-		nPhaseIdle = LowLevel::Phase::C;
+		LowLevel::SetPhase(LowLevel::Phase::A, LowLevel::State::Idle);
+		LowLevel::SetPhase(LowLevel::Phase::B, LowLevel::State::High);
+		LowLevel::SetPhase(LowLevel::Phase::C, LowLevel::State::Low);
+		nPhaseHigh = LowLevel::Phase::B;
+		nPhaseIdle = LowLevel::Phase::A;
 		break;
 	}
 }
@@ -149,15 +149,15 @@ void HAL::BLDC::Driver::NewPhaseVoltages(uint16_t *data) {
 				if (A > B && B >= C) {
 					RotorPos = 0;
 				} else if (B > A && A >= C) {
-					RotorPos = 1;
+					RotorPos = 5;
 				} else if (B > C && C >= A) {
-					RotorPos = 2;
+					RotorPos = 4;
 				} else if (C > B && B >= A) {
 					RotorPos = 3;
 				} else if (C > A && A >= B) {
-					RotorPos = 4;
+					RotorPos = 2;
 				} else if (A > C && C >= B) {
-					RotorPos = 5;
+					RotorPos = 1;
 				}
 			} else {
 				RotorPos = -1;
@@ -205,42 +205,41 @@ void HAL::BLDC::Driver::NewPhaseVoltages(uint16_t *data) {
 	}
 		break;
 	case InternalState::Starting:
-		SetStep(RotorPos);
-		NextState(InternalState::Powered_PreZero);
-		break;
+//		SetStep(RotorPos);
+//		NextState(InternalState::Powered_PreZero);
+//		break;
 	case InternalState::Powered_PreZero:
 	{
 		if (state == State::Starting
 				&& HAL_GetTick() - lastStoppedTime > startTime) {
 			state = State::Running;
 		}
-		constexpr uint16_t nPulsesSkip = 1;
+		constexpr uint16_t nPulsesSkip = 5;
 		constexpr uint16_t ZeroThreshold = 10;
 		constexpr uint32_t timeoutThresh = CommutationTimeoutms
 				* Defines::PWM_Frequency / 1000;
 
 		const uint16_t supply = data[(int) nPhaseHigh];
 
-//		uint16_t skip = nPulsesSkip;
-//		if (state == State::Starting) {
-//			// this is the first commutation from a stopped position
-//			// wait a little bit longer until enabling detector
-//			skip += 2;
-//		}
-
 		static uint32_t integral;
-
 		if (cnt == 1) {
 			SetStep(RotorPos);
 			integral = 0;
 		}
-		if (true) {
+
+		uint16_t skip = nPulsesSkip;
+		if (state == State::Starting && cnt <= nPulsesSkip) {
+			// this is the first commutation from a stopped position
+			// wait a little bit longer until enabling detector
+			break;
+		}
+
+//		if (cnt > nPulsesSkip) {
 			if(cnt >= timeoutThresh) {
 				// failed to detect the next commutation in time, motor probably stalled
 				Log::Uart(Log::Lvl::Wrn, "Commutation timed out");
 				IncRotorPos();
 				IncRotorPos();
-				DetectorArmed = false;
 				NextState(InternalState::Powered_PreZero);
 			}
 
@@ -251,11 +250,11 @@ void HAL::BLDC::Driver::NewPhaseVoltages(uint16_t *data) {
 				break;
 			}
 
-			bool rising = (dir == Direction::Forward) ^ (RotorPos & 0x01);
+			bool rising = (dir == Direction::Reverse) ^ (RotorPos & 0x01);
 			const uint16_t zero = supply * mot->ZeroCal[RotorPos] / 65536;;
 			int16_t compare = phase - zero;
 
-			constexpr uint32_t integralLimit = 750;
+			constexpr uint32_t integralLimit = 1500;
 			uint32_t limit = integralLimit;
 			if (IntState == InternalState::Starting) {
 				limit *= 50;
@@ -269,25 +268,30 @@ void HAL::BLDC::Driver::NewPhaseVoltages(uint16_t *data) {
 					CommutationCycles[RotorPos] = cnt;
 					IncRotorPos();
 					SetStep(RotorPos);
-					if(cnt <= 2) {
-						// check other commutation cycles cnt to detect backfiring motor
-						uint16_t sum = 0;
-						for(auto i : CommutationCycles) {
-							sum += i;
-						}
-						Log::Uart(Log::Lvl::Wrn, "Sum %d", sum);
-						if (sum > 6 * cnt * 100) {
-							Log::Uart(Log::Lvl::Wrn,
-									"Detected backfiring motor, aligning");
-							lastStoppedTime = HAL_GetTick();
-							state = State::Starting;
-							NextState(InternalState::AlignAndGo);
-							break;
-						}
+//					if(cnt <= 2) {
+//						// check other commutation cycles cnt to detect backfiring motor
+//						uint16_t sum = 0;
+//						for(auto i : CommutationCycles) {
+//							sum += i;
+//						}
+//						Log::Uart(Log::Lvl::Wrn, "Sum %d", sum);
+//						if (sum > 6 * cnt * 100) {
+//							Log::Uart(Log::Lvl::Wrn,
+//									"Detected backfiring motor, aligning");
+//							lastStoppedTime = HAL_GetTick();
+//							state = State::Starting;
+//							NextState(InternalState::AlignAndGo);
+//							break;
+//						}
+//					}
+					if(IntState == InternalState::Starting) {
+						Log::Uart(Log::Lvl::Dbg, "First commutation cnt: %d", cnt);
 					}
 					NextState(InternalState::Powered_PreZero);
 					HAL_GPIO_TogglePin(TRIGGER_GPIO_Port, TRIGGER_Pin);
 				}
+			} else {
+				integral = 0;
 			}
 
 //			if (DetectorArmed) {
@@ -304,7 +308,7 @@ void HAL::BLDC::Driver::NewPhaseVoltages(uint16_t *data) {
 //					DetectorArmed = true;
 //				}
 //			}
-		}
+//		}
 	}
 		break;
 	case InternalState::Powered_PastZero:
@@ -439,7 +443,7 @@ HAL::BLDC::Driver::Driver(Data *d) {
 	stateBuf = InternalState::None;
 	state = State::Stopped;
 	cnt = 0;
-	dir = Direction::Forward;
+	dir = Direction::Reverse;
 	RotorPos = -1;
 	mot = d;
 	// check if data is plausible
@@ -505,15 +509,10 @@ void HAL::BLDC::Driver::InitiateStart() {
 		Log::Uart(Log::Lvl::Dbg, "Starting motor from unknown position: initial position detection");
 		// rotor position not known at the moment, detect using inductance sensing
 		HAL_ADC_Stop_DMA(&hadc1);
-		uint8_t pos = InductanceSensing::RotorPosition();
-		HAL_ADC_Start_DMA(&hadc1, (uint32_t*) ADCBuf, ADCBufferLength);
-		Log::Uart(Log::Lvl::Dbg, "Position: %d", pos);
-		if (pos > 0) {
-			if(dir == Direction::Forward) {
-				RotorPos = (9 - pos) % 6;
-			} else {
-				RotorPos = (11 - pos) % 6;
-			}
+		RotorPos = InductanceSensing::RotorPosition();
+		Log::Uart(Log::Lvl::Dbg, "Position: %d", RotorPos);
+		if (RotorPos >= 0) {
+			IncRotorPos();
 		} else {
 			// unable to determine rotor position, use align and go
 			Log::Uart(Log::Lvl::Wrn, "Unable to determine position, fall back to align and go");
@@ -524,9 +523,9 @@ void HAL::BLDC::Driver::InitiateStart() {
 		}
 	}
 	LowLevel::SetPWM(minPWM);
-	DetectorArmed = false;
 	SetStep(RotorPos);
 	stateBuf = InternalState::Starting;
+	HAL_ADC_Start_DMA(&hadc1, (uint32_t*) ADCBuf, ADCBufferLength);
 	lastStoppedTime = HAL_GetTick();
 	state = State::Starting;
 }
