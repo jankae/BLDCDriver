@@ -69,7 +69,7 @@ public:
 
 	static Driver *Inst;
 	static constexpr uint32_t minPWM = 100;
-	static constexpr uint32_t CommutationTimeoutms = 100;
+	static constexpr uint32_t CommutationTimeoutms = 150;
 	static constexpr uint8_t MotorPoles = 12;
 	static constexpr uint32_t startTime = 2000;
 	void NewPhaseVoltages(uint16_t *data);
@@ -80,7 +80,8 @@ public:
 
 	volatile InternalState IntState, stateBuf;
 	uint32_t cnt;
-	uint32_t timeToZero;
+	uint8_t startCnt;
+//	uint32_t timeToZero;
 
 	Data *mot;
 
@@ -91,7 +92,7 @@ public:
 
 	uint32_t commutationCnt;
 	uint32_t PWMperiodCnt;
-	uint32_t lastStoppedTime;
+//	uint32_t lastStoppedTime;
 	std::array<uint32_t, 6> CommutationCycles;
 	uint32_t result;
 };

@@ -119,7 +119,7 @@ void HAL_SPI_MspInit(SPI_HandleTypeDef* spiHandle)
 
     /* SPI1 DMA Init */
     /* SPI1_RX Init */
-    hdma_spi1_rx.Instance = DMA1_Channel4;
+    hdma_spi1_rx.Instance = DMA1_Channel6;
     hdma_spi1_rx.Init.Direction = DMA_PERIPH_TO_MEMORY;
     hdma_spi1_rx.Init.PeriphInc = DMA_PINC_DISABLE;
     hdma_spi1_rx.Init.MemInc = DMA_MINC_ENABLE;
@@ -132,7 +132,7 @@ void HAL_SPI_MspInit(SPI_HandleTypeDef* spiHandle)
       _Error_Handler(__FILE__, __LINE__);
     }
 
-    __HAL_DMA_REMAP_CHANNEL_ENABLE(HAL_REMAPDMA_SPI1_RX_DMA1_CH4);
+    __HAL_DMA_REMAP_CHANNEL_ENABLE(HAL_REMAPDMA_SPI1_RX_DMA1_CH6);
 
     __HAL_LINKDMA(spiHandle,hdmarx,hdma_spi1_rx);
 

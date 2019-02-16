@@ -106,6 +106,7 @@ void HAL::BLDC::Driver::NewPhaseVoltages(uint16_t *data) {
 		/* no break */
 	case InternalState::Idle:
 	{
+//		Log::WriteString("bla\n");
 		// do not apply any voltages to the phase terminals
 		SetIdle();
 		CommutationCycles.fill(2 * Defines::PWM_Frequency);
@@ -208,66 +209,70 @@ void HAL::BLDC::Driver::NewPhaseVoltages(uint16_t *data) {
 //		SetStep(RotorPos);
 //		NextState(InternalState::Powered_PreZero);
 //		break;
+		startCnt = 0;
+		/* no break */
 	case InternalState::Powered_PreZero:
 	{
-		if (state == State::Starting
-				&& HAL_GetTick() - lastStoppedTime > startTime) {
-			state = State::Running;
-		}
 		constexpr uint16_t nPulsesSkip = 5;
 		constexpr uint16_t ZeroThreshold = 10;
 		constexpr uint32_t timeoutThresh = CommutationTimeoutms
 				* Defines::PWM_Frequency / 1000;
 
-		const uint16_t supply = data[(int) nPhaseHigh];
-
-		static uint32_t integral;
+		static int32_t integral;
 		if (cnt == 1) {
 			SetStep(RotorPos);
-			integral = 0;
+			integral = -1;
 		}
 
+		const uint16_t supply = data[(int) nPhaseHigh];
+
 		uint16_t skip = nPulsesSkip;
-		if (state == State::Starting && cnt <= nPulsesSkip) {
-			// this is the first commutation from a stopped position
-			// wait a little bit longer until enabling detector
+		static uint16_t zero;
+//		if (IntState == InternalState::Starting && cnt < 40) {
+//			// capture zero voltage
+//			zero = data[(int) nPhaseIdle];
+//			integral = 0;
+//		} else if (IntState != InternalState::Starting) {
+		zero = (uint32_t) supply * mot->ZeroCal[RotorPos] / 65536;
+//		}
+
+//		if (cnt > nPulsesSkip) {
+		if (cnt >= timeoutThresh) {
+			// failed to detect the next commutation in time, motor probably stalled
+			Log::Uart(Log::Lvl::Wrn, "Commutation timed out");
+			IncRotorPos();
+			IncRotorPos();
+			NextState(InternalState::Powered_PreZero);
+		}
+
+		const uint16_t phase = data[(int) nPhaseIdle];
+
+		const uint16_t min = supply / 10;
+		if (phase < min || phase + min > supply) {
 			break;
 		}
 
-//		if (cnt > nPulsesSkip) {
-			if(cnt >= timeoutThresh) {
-				// failed to detect the next commutation in time, motor probably stalled
-				Log::Uart(Log::Lvl::Wrn, "Commutation timed out");
+		bool rising = (dir == Direction::Reverse) ^ (RotorPos & 0x01);
+		int16_t compare = phase - zero;
+
+		constexpr uint32_t integralLimit = 500;
+		uint32_t limit = integralLimit;
+//			if (IntState == InternalState::Starting) {
+//				limit *= 50;
+//			}
+		if (!rising) {
+			compare = -compare;
+		}
+		if (abs(compare) < supply / 30) {
+			compare = 0;
+		}
+
+		if (compare > 0 && integral != -1) {
+			integral += compare;
+			if (integral >= limit) {
+				CommutationCycles[RotorPos] = cnt;
 				IncRotorPos();
-				IncRotorPos();
-				NextState(InternalState::Powered_PreZero);
-			}
-
-			const uint16_t phase = data[(int) nPhaseIdle];
-
-			const uint16_t min = supply / 10;
-			if(phase < min || phase + min > supply) {
-				break;
-			}
-
-			bool rising = (dir == Direction::Reverse) ^ (RotorPos & 0x01);
-			const uint16_t zero = supply * mot->ZeroCal[RotorPos] / 65536;;
-			int16_t compare = phase - zero;
-
-			constexpr uint32_t integralLimit = 1500;
-			uint32_t limit = integralLimit;
-			if (IntState == InternalState::Starting) {
-				limit *= 50;
-			}
-			if(!rising) {
-				compare = -compare;
-			}
-			if(compare > 0) {
-				integral += compare;
-				if(integral >= limit) {
-					CommutationCycles[RotorPos] = cnt;
-					IncRotorPos();
-					SetStep(RotorPos);
+				SetStep(RotorPos);
 //					if(cnt <= 2) {
 //						// check other commutation cycles cnt to detect backfiring motor
 //						uint16_t sum = 0;
@@ -284,15 +289,49 @@ void HAL::BLDC::Driver::NewPhaseVoltages(uint16_t *data) {
 //							break;
 //						}
 //					}
-					if(IntState == InternalState::Starting) {
-						Log::Uart(Log::Lvl::Dbg, "First commutation cnt: %d", cnt);
+				if (startCnt < 6) {
+					static uint16_t startArray[6];
+					startArray[startCnt] = cnt;
+					startCnt++;
+					if (startCnt == 6) {
+						// check if start was successful
+						uint8_t startSuccess = 1;
+						for (uint8_t i = 1; i < startCnt; i++) {
+							if (startArray[i] >= startArray[i - 1] * 2) {
+								// velocity did not increase smoothly, start failed
+								startSuccess = 0;
+								break;
+							}
+						}
+						if(startSuccess) {
+							state = State::Running;
+						} else {
+							NextState(InternalState::AlignAndGo);
+							break;
+						}
 					}
-					NextState(InternalState::Powered_PreZero);
-					HAL_GPIO_TogglePin(TRIGGER_GPIO_Port, TRIGGER_Pin);
 				}
-			} else {
-				integral = 0;
+
+//					if(IntState == InternalState::Starting) {
+//						Log::Uart(Log::Lvl::Dbg, "First commutation cnt: %d", cnt);
+//					}
+				NextState(InternalState::Powered_PreZero);
+//					HAL_GPIO_TogglePin(TRIGGER_GPIO_Port, TRIGGER_Pin);
 			}
+		} else if (compare <= 0) {
+			integral = 0;
+		}
+		uint16_t logval = compare + 2048;
+		char buf[12];
+		buf[0] = RotorPos + '0';
+		buf[1] = ';';
+		buf[2] = (logval / 1000) % 10 + '0';
+		buf[3] = (logval / 100) % 10 + '0';
+		buf[4] = (logval / 10) % 10 + '0';
+		buf[5] = (logval / 1) % 10 + '0';
+		buf[6] = '\n';
+		buf[7] = 0;
+		Log::WriteString(buf);
 
 //			if (DetectorArmed) {
 //				if ((compare <= 0 && !rising)
@@ -311,16 +350,16 @@ void HAL::BLDC::Driver::NewPhaseVoltages(uint16_t *data) {
 //		}
 	}
 		break;
-	case InternalState::Powered_PastZero:
-	{
-		if(cnt >= timeToZero) {
-			// next commutation is due
-			IncRotorPos();
-			SetStep(RotorPos);
-			NextState(InternalState::Powered_PreZero);
-			HAL_GPIO_TogglePin(TRIGGER_GPIO_Port, TRIGGER_Pin);
-		}
-	}
+//	case InternalState::Powered_PastZero:
+//	{
+//		if(cnt >= timeToZero) {
+//			// next commutation is due
+//			IncRotorPos();
+//			SetStep(RotorPos);
+//			NextState(InternalState::Powered_PreZero);
+//			HAL_GPIO_TogglePin(TRIGGER_GPIO_Port, TRIGGER_Pin);
+//		}
+//	}
 		break;
 	case InternalState::Calibrating: {
 		if (cnt == 1) {
@@ -513,6 +552,7 @@ void HAL::BLDC::Driver::InitiateStart() {
 		Log::Uart(Log::Lvl::Dbg, "Position: %d", RotorPos);
 		if (RotorPos >= 0) {
 			IncRotorPos();
+			IncRotorPos();
 		} else {
 			// unable to determine rotor position, use align and go
 			Log::Uart(Log::Lvl::Wrn, "Unable to determine position, fall back to align and go");
@@ -521,13 +561,18 @@ void HAL::BLDC::Driver::InitiateStart() {
 			WhileStateEquals(InternalState::Align);
 			IncRotorPos();
 		}
+		LowLevel::SetPWM(minPWM);
+		SetStep(RotorPos);
+		stateBuf = InternalState::Starting;
+		HAL_ADC_Start_DMA(&hadc1, (uint32_t*) ADCBuf, ADCBufferLength);
+		DMA1_Channel1->CCR &= ~DMA_CCR_HTIE;
+//		lastStoppedTime = HAL_GetTick();
+		state = State::Starting;
+	} else {
+		IncRotorPos();
+		stateBuf = InternalState::Powered_PreZero;
+		state = State::Running;
 	}
-	LowLevel::SetPWM(minPWM);
-	SetStep(RotorPos);
-	stateBuf = InternalState::Starting;
-	HAL_ADC_Start_DMA(&hadc1, (uint32_t*) ADCBuf, ADCBufferLength);
-	lastStoppedTime = HAL_GetTick();
-	state = State::Starting;
 }
 
 void HAL::BLDC::Driver::Stop() {

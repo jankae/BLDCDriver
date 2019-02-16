@@ -2406,6 +2406,7 @@ static void UART_DMATransmitCplt(DMA_HandleTypeDef *hdma)
 
     /* Enable the UART Transmit Complete Interrupt */
     SET_BIT(huart->Instance->CR1, USART_CR1_TCIE);
+    NVIC_SetPendingIRQ(USART3_IRQn);
   }
   /* DMA Circular mode */
   else

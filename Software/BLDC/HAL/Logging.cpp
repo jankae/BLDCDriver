@@ -8,13 +8,22 @@
 std::array<enum Log::Lvl, (int) Log::Class::MAX> levels;
 
 #include <string.h>
-#include "fifo.hpp"
+//#include "fifo.hpp"
 #include "usart.h"
 
-static Fifo<uint8_t, 1024> fifo __attribute__ ((section (".ccmram")));
+//static Fifo<uint8_t, 1024> fifo __attribute__ ((section (".ccmram")));
+static constexpr uint16_t LogBufSize = 512;
+static uint8_t buf1[LogBufSize];
+static uint8_t buf2[LogBufSize];
+static uint8_t *buffering;
+static uint8_t *transmitting;
+static volatile uint16_t bufIndex;
+static volatile bool transmissionActive;
 
-#define USART 				3
+#define USART_HANDLE 		huart3
+extern UART_HandleTypeDef 	USART_HANDLE;
 
+#define USART				3
 /* Automatically build register and function names based on USART selection */
 #define USART_M2(y) 		USART ## y
 #define USART_M1(y)  		USART_M2(y)
@@ -28,17 +37,15 @@ static Fifo<uint8_t, 1024> fifo __attribute__ ((section (".ccmram")));
 #define NVIC_ISR_M1(x)  	NVIC_ISR_M2(x)
 #define NVIC_ISR			NVIC_ISR_M1(USART)
 
-#define writeString(s) \
-do { const char string[] = s; write(string, string + sizeof(string) - 1); } while(0)
-
 static void init() {
 	/* USART1 interrupt Init */
-	HAL_NVIC_SetPriority(NVIC_ISR, 5, 0);
+	HAL_NVIC_SetPriority(NVIC_ISR, 1, 0);
 	HAL_NVIC_EnableIRQ(NVIC_ISR);
-	// enable receive interrupt
-	USART_BASE->CR1 |= USART_CR1_RXNEIE;
 
-	fifo.clear();
+	buffering = buf1;
+	transmitting = buf2;
+	bufIndex = 0;
+	transmissionActive = false;
 }
 
 __weak void LogRedirect(const char *data, uint16_t length){
@@ -46,36 +53,57 @@ __weak void LogRedirect(const char *data, uint16_t length){
 	UNUSED(length);
 }
 
+static void NextTransmission() {
+	transmissionActive = true;
+	uint16_t transmissionSize = bufIndex;
+	HAL_UART_Transmit_DMA(&USART_HANDLE, buffering, transmissionSize);
+	{
+		CriticalSection crit;
+		uint8_t *b = buffering;
+		buffering = transmitting;
+		transmitting = b;
+		bufIndex -= transmissionSize;
+		if (bufIndex) {
+			memcpy(buffering, &transmitting[transmissionSize], bufIndex);
+		}
+	}
+}
+
 void write(const char *start, const char *end) {
 	LogRedirect(start, end - start);
-	while(start != end) {
-		fifo.enqueue(*start);
-		start++;
+	CriticalSection crit;
+	if (end - start < LogBufSize - bufIndex) {
+		memcpy(&buffering[bufIndex], start, end - start);
+		bufIndex += (end - start);
+		if (!transmissionActive) {
+			// enable ISR
+			NVIC_SetPendingIRQ(NVIC_ISR);
+		}
 	}
-	USART_BASE->CR1 |= USART_CR1_TXEIE;
 }
 
 extern "C" {
 /* Implemented directly here for speed reasons. Disable interrupt in CubeMX! */
 void HANDLER(void)
 {
-	if (USART_BASE->ISR & USART_ISR_TXE) {
-		uint8_t data = 0;
-		if (fifo.dequeue(data)) {
-			USART_BASE->TDR = data;
+//	if(USART_BASE->ISR & USART_ISR_TC) {
+		// clear flag
+//		USART_BASE->ICR = USART_ICR_TCCF;
+		// This interrupt is called while the UART is still in transmit mode
+		// despite having finished transmitting. To allow a new transmission
+		// to start, abort the already finished transmission, thereby resetting
+		// the UART state in the ST HAL
+		if (transmissionActive) {
+			HAL_UART_Abort(&USART_HANDLE);
 		}
-		if (fifo.getLevel() == 0) {
-			/* complete buffer sent, disable interrupt */
-			USART_BASE->CR1 &= ~USART_CR1_TXEIE;
+		if (bufIndex > 0) {
+			NextTransmission();
+		} else {
+			transmissionActive = false;
 		}
-	}
-	while (USART_BASE->ISR & USART_ISR_RXNE) {
-		uint8_t data = USART_BASE->RDR;
-		extern Core::Sysinfo sys;
-		if (sys.communication) {
-			sys.communication->NewData(data);
-		}
-	}
+		// disable ISR
+		USART_BASE->CR1 &= ~USART_CR1_TCIE;
+//	}
 }
 }
 
@@ -84,7 +112,6 @@ void Log::Init(enum Lvl lvl) {
 	for (auto i = 0; i < (int) Log::Class::MAX; i++) {
 		levels[i] = lvl;
 	}
-	fifo.clear();
 	init();
 }
 
@@ -112,19 +139,19 @@ void Log::Uart(enum Lvl lvl, const char* fmt, ...) {
 		write(time, time + 6);
 		switch(lvl) {
 		case Lvl::Dbg:
-			writeString("[DBG]:");
+			WriteString("[DBG]:");
 			break;
 		case Lvl::Inf:
-			writeString("[INF]:");
+			WriteString("[INF]:");
 			break;
 		case Lvl::Wrn:
-			writeString("[WRN]:");
+			WriteString("[WRN]:");
 			break;
 		case Lvl::Err:
-			writeString("[ERR]:");
+			WriteString("[ERR]:");
 			break;
 		case Lvl::Crt:
-			writeString("[CRT]:");
+			WriteString("[CRT]:");
 			break;
 		}
 		char buffer[128];
@@ -134,11 +161,10 @@ void Log::Uart(enum Lvl lvl, const char* fmt, ...) {
 		va_end(arp);
 
 		write(buffer, buffer + len);
-		writeString("\n");
+		WriteString("\n");
 	}
 }
 
-void Log::WriteChar(char c) {
-	fifo.enqueue(c);
-	USART_BASE->CR1 |= USART_CR1_TXEIE;
+void Log::WriteString(const char* s) {
+	write(s, s + strlen(s));
 }
