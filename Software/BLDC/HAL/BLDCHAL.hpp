@@ -14,9 +14,9 @@ public:
 	using ADCCallback = void (*)(void* ptr, uint32_t voltage, uint32_t current);
 
 	using MotorData = struct motordata {
-		uint16_t rpm;
-		uint32_t voltage;
 		uint32_t current;
+		uint32_t voltage;
+		uint16_t rpm;
 	};
 
 	enum class TestResult : uint8_t {

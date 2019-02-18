@@ -321,17 +321,17 @@ void HAL::BLDC::Driver::NewPhaseVoltages(uint16_t *data) {
 		} else if (compare <= 0) {
 			integral = 0;
 		}
-		uint16_t logval = compare + 2048;
-		char buf[12];
-		buf[0] = RotorPos + '0';
-		buf[1] = ';';
-		buf[2] = (logval / 1000) % 10 + '0';
-		buf[3] = (logval / 100) % 10 + '0';
-		buf[4] = (logval / 10) % 10 + '0';
-		buf[5] = (logval / 1) % 10 + '0';
-		buf[6] = '\n';
-		buf[7] = 0;
-		Log::WriteString(buf);
+//		uint16_t logval = compare + 2048;
+//		char buf[12];
+//		buf[0] = RotorPos + '0';
+//		buf[1] = ';';
+//		buf[2] = (logval / 1000) % 10 + '0';
+//		buf[3] = (logval / 100) % 10 + '0';
+//		buf[4] = (logval / 10) % 10 + '0';
+//		buf[5] = (logval / 1) % 10 + '0';
+//		buf[6] = '\n';
+//		buf[7] = 0;
+//		Log::WriteString(buf);
 
 //			if (DetectorArmed) {
 //				if ((compare <= 0 && !rising)

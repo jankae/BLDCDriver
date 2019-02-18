@@ -18,11 +18,13 @@ private:
 	I2C_TypeDef *i2c;
 	uint8_t *read;
 	uint8_t *write;
+	uint8_t *readBuf;
+	uint8_t *writeBuf;
 	uint16_t readSize, writeSize;
 	int16_t MemoryAddress;
 	Callback callback;
 	void *ptr;
-	bool callbackDue;
+	int16_t writeStart;
 };
 
 #endif

@@ -1,6 +1,7 @@
 #include "Motor.hpp"
 
 #include "cast.hpp"
+#include "Logging.hpp"
 
 Core::Motor::Motor(Sysinfo& s) {
 	sys = &s;
@@ -27,14 +28,25 @@ void Core::Motor::ControlTask() {
 	InState in = inState;
 	while (1) {
 		vTaskDelayUntil(&lastExecutionTime, ControllerPeriod);
-		if (xTaskNotifyWait(0x00, 0x00, NULL, 0) == pdPASS) {
-			vPortEnterCritical();
-			in = inState;
-			vPortExitCritical();
-		}
+//		if (xTaskNotifyWait(0x00, 0x00, NULL, 0) == pdPASS) {
+		auto data = sys->driver->GetData();
+		vPortEnterCritical();
+		outState.Current = data.current;
+		outState.RPM = data.rpm;
+		outState.Voltage = data.voltage;
+		outState.Torque = 0;
+		outState.Thrust = 0;
+		in = inState;
+		vPortExitCritical();
+//		static uint32_t lastLog = 0;
+//		if(xTaskGetTickCount() - lastLog > 250) {
+//			lastLog = xTaskGetTickCount();
+//			Log::Uart(Log::Lvl::Dbg, "I %ld, V %ld", outState.Current, outState.Voltage);
+//		}
+//		}
 		switch(sys->driver->GetState()) {
 		case HAL::BLDC::HALDriver::State::Running:
-			switch(in.mode) {
+			switch (in.mode) {
 			case ControlMode::Off:
 				sys->driver->Stop();
 				break;
@@ -46,7 +58,7 @@ void Core::Motor::ControlTask() {
 			}
 			break;
 		case HAL::BLDC::HALDriver::State::Stopped:
-			switch(in.mode) {
+			switch (in.mode) {
 			case ControlMode::Off:
 				break;
 			case ControlMode::Promille:
@@ -55,15 +67,14 @@ void Core::Motor::ControlTask() {
 			}
 			break;
 		case HAL::BLDC::HALDriver::State::Starting:
-			if(in.mode == ControlMode::Off) {
+			if (in.mode == ControlMode::Off) {
 				sys->driver->Stop();
 			}
 			break;
 		case HAL::BLDC::HALDriver::State::Stopping:
-			if(in.mode != ControlMode::Off) {
+			if (in.mode != ControlMode::Off) {
 				sys->driver->InitiateStart();
 			}
-			break;
 			break;
 		}
 	}
