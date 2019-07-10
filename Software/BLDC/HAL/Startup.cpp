@@ -86,6 +86,10 @@ void Start() {
 //	Test::MotorManualStart();
 //	Test::DifferentPWMs();
 
+//	sys.driver->InitiateStart();
+//	vTaskDelay(2000);
+//	sys.driver->SetPWM(500);
+
 	// Startup completed, this task is no longer needed
 	vTaskDelete(nullptr);
 }
