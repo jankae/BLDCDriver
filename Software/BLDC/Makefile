@@ -54,7 +54,7 @@ CXX_SOURCES := $(foreach sdir,$(SOURCES_DIR),$(wildcard $(sdir)/*.cpp))
 
 # ASM sources
 ASM_SOURCES =  \
-startup_stm32f303x8.s
+startup/startup_stm32f303x8.s
 
 
 ######################################
