@@ -5,6 +5,7 @@
 
 #include "Logging.hpp"
 #include "Defines.hpp"
+#include "main.h"
 
 using namespace HAL::BLDC;
 

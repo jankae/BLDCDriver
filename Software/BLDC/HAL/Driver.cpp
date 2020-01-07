@@ -2,6 +2,7 @@
 
 #include "lowlevel.hpp"
 #include "Logging.hpp"
+#include "main.h"
 
 #include "stm32f3xx_hal.h"
 #include "stm32f303x8.h"
