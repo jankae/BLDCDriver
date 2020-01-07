@@ -256,8 +256,8 @@ void HAL::BLDC::Driver::NewPhaseVoltages(uint16_t *data) {
 		bool rising = (dir == Direction::Reverse) ^ (RotorPos & 0x01);
 		int16_t compare = phase - zero;
 
-		constexpr uint32_t integralLimit = 500;
-		uint32_t limit = integralLimit;
+		constexpr int32_t integralLimit = 200;
+		int32_t limit = integralLimit;
 //			if (IntState == InternalState::Starting) {
 //				limit *= 50;
 //			}
